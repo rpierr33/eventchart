@@ -30,8 +30,23 @@ export default function QRTab(props: {
   const { eventId, publicSlug, layout, qrCodes, onChange } = props;
   const [creating, setCreating] = useState(false);
   const [creatorOpen, setCreatorOpen] = useState(false);
-  const [bulkBusy, setBulkBusy] = useState(false);
+  const [regenBusy, setRegenBusy] = useState(false);
   const [wayfindingBusy, setWayfindingBusy] = useState(false);
+
+  async function regenerateAll() {
+    setRegenBusy(true);
+    const res = await fetch(`/api/events/${eventId}/qr/bulk-auto`, { method: "POST" });
+    setRegenBusy(false);
+    const data = await res.json();
+    if (!res.ok) { toast.error(data?.error ?? "Could not regenerate"); return; }
+    const r = await fetch(`/api/events/${eventId}/state`);
+    if (r.ok) {
+      const s = await r.json();
+      onChange(s.qrCodes);
+    }
+    if (data.created === 0) toast.info("All QRs already exist for every landmark and table.");
+    else toast.success(`Added ${data.created} QR${data.created !== 1 ? "s" : ""} (${data.landmarks} landmark, ${data.tables} table).`);
+  }
 
   const appUrl = typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || "";
 
@@ -51,20 +66,6 @@ export default function QRTab(props: {
     onChange([...qrCodes, data.qr]);
     setCreatorOpen(false);
     toast.success(`QR created for ${anchor.label}.`);
-  }
-
-  async function generateOneQrPerTable() {
-    setBulkBusy(true);
-    const res = await fetch(`/api/events/${eventId}/qr/bulk-tables`, { method: "POST" });
-    setBulkBusy(false);
-    const data = await res.json();
-    if (!res.ok) { toast.error(data?.error ?? "Could not generate"); return; }
-    const r = await fetch(`/api/events/${eventId}/state`);
-    if (r.ok) {
-      const s = await r.json();
-      onChange(s.qrCodes);
-    }
-    toast.success(`${data.created} table QR${data.created !== 1 ? "s" : ""} created.`);
   }
 
   async function generateWayfinding() {
@@ -116,21 +117,26 @@ export default function QRTab(props: {
           <div>
             <h3 className="font-medium text-[16px] mb-1 tracking-tight">QR codes</h3>
             <p className="text-[13px] text-[var(--color-fg-muted)] max-w-md">
-              Every QR is linked to a specific spot on your plan — entrance, bar, restroom, or a table. Position auto-fills from the floor plan.
+              One QR per landmark + one per table, auto-generated from your floor plan. Delete the ones you don&apos;t need. Print and post.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={generateOneQrPerTable} disabled={bulkBusy || creating} className="btn h-10 text-[13px]">
-              {bulkBusy ? "Generating…" : "+ One per table"}
+            <button onClick={regenerateAll} disabled={regenBusy || creating} className="btn h-10 text-[13px]">
+              {regenBusy ? "Syncing…" : "Sync from floor plan"}
             </button>
-            <button onClick={() => setCreatorOpen(true)} disabled={creating} className="btn btn-primary h-10 text-[13px]">
-              + New QR
+            <button onClick={() => setCreatorOpen(true)} disabled={creating} className="btn h-10 text-[13px]">
+              + Custom location
             </button>
           </div>
         </div>
 
         {qrCodes.length === 0 ? (
-          <p className="text-[13px] text-[var(--color-fg-muted)] py-2">No QR codes yet. Add at least one to publish.</p>
+          <div className="py-6 text-center">
+            <p className="text-[13px] text-[var(--color-fg-muted)] mb-3">No QR codes yet. Click <strong>Sync from floor plan</strong> to generate one per landmark and table.</p>
+            <button onClick={regenerateAll} disabled={regenBusy} className="btn btn-primary h-10 text-[13px]">
+              {regenBusy ? "Generating…" : "Sync from floor plan"}
+            </button>
+          </div>
         ) : (
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

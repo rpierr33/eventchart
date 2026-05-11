@@ -111,7 +111,7 @@ export default function LayoutTab(props: {
       if (!persistRes.ok) throw new Error("Could not save detected tables");
       const pd = await persistRes.json();
 
-      // 5. Persist detected landmarks (entrance, bar, stage, ...) for the QR creator picker
+      // 5. Persist detected landmarks (entrance, bar, stage, ...)
       const aiLandmarks = Array.isArray(aiData.landmarks) ? aiData.landmarks : [];
       if (aiLandmarks.length > 0) {
         await fetch(`/api/events/${eventId}/landmarks`, {
@@ -126,7 +126,20 @@ export default function LayoutTab(props: {
           }),
         }).catch(() => {});
       }
-      toast.success(`AI detected ${pd.tables.length} tables${aiLandmarks.length ? ` and ${aiLandmarks.length} landmarks` : ""}. Review below.`);
+
+      // 6. Auto-generate every QR the floor plan implies: one per detected landmark + one per table.
+      //    The system already knows every location — no need to ask the planner.
+      const qrGenRes = await fetch(`/api/events/${eventId}/qr/bulk-auto`, { method: "POST" });
+      let qrCreated = 0;
+      if (qrGenRes.ok) {
+        const qrData = await qrGenRes.json();
+        qrCreated = qrData.created ?? 0;
+      }
+
+      toast.success(
+        `Detected ${pd.tables.length} tables${aiLandmarks.length ? ` + ${aiLandmarks.length} landmarks` : ""}` +
+        (qrCreated ? `. Auto-generated ${qrCreated} QR codes — see the QR tab.` : ".")
+      );
       onChange({ ...createData.layout, tables: pd.tables });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
