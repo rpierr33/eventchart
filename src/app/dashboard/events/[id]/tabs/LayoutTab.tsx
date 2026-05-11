@@ -1,8 +1,65 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { arrayBufferToBase64 } from "@/lib/utils";
+
+// Pick-mode section assignment for a single table row in the review table.
+// Dropdown of existing sections + "+ New section…" inline create.
+function SectionPicker({
+  eventId,
+  sections,
+  currentId,
+  onChange,
+}: {
+  eventId: string;
+  sections: SectionForTabs[];
+  currentId: string | null;
+  onChange: (sectionId: string | null) => void;
+}) {
+  const [localSections, setLocalSections] = useState<SectionForTabs[]>(sections);
+  useEffect(() => setLocalSections(sections), [sections]);
+
+  async function createNew() {
+    const label = prompt("New section name (e.g., Bride's Side, VIP, Kids):");
+    if (!label?.trim()) return;
+    // Default coords: image center — planner can move later if we ship polygon mode
+    const next = [...localSections, { id: "tmp", label: label.trim(), xPct: 50, yPct: 50, color: null }];
+    const res = await fetch(`/api/events/${eventId}/sections`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sections: next.filter(s => s.id !== "tmp").map(({ label, xPct, yPct, color }) => ({ label, xPct, yPct, color: color ?? null }))
+          .concat([{ label: label.trim(), xPct: 50, yPct: 50, color: null }]),
+      }),
+    });
+    if (!res.ok) { toast.error("Could not create section"); return; }
+    const data = await res.json();
+    setLocalSections(data.sections.map((s: { id: string; label: string; xPct: number; yPct: number; color: string | null }) => ({
+      id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, color: s.color,
+    })));
+    const just = (data.sections as Array<{ id: string; label: string }>).find(s => s.label.toLowerCase() === label.trim().toLowerCase());
+    if (just) onChange(just.id);
+  }
+
+  return (
+    <select
+      className="input h-9"
+      value={currentId ?? ""}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (v === "__new__") { void createNew(); return; }
+        onChange(v === "" ? null : v);
+      }}
+    >
+      <option value="">— None —</option>
+      {localSections.map(s => (
+        <option key={s.id} value={s.id}>{s.label}</option>
+      ))}
+      <option value="__new__">+ New section…</option>
+    </select>
+  );
+}
 
 export type TableForTabs = {
   id?: string;
@@ -12,6 +69,15 @@ export type TableForTabs = {
   yPct: number;
   directionsText: string | null;
   notes: string | null;
+  sectionId?: string | null;
+};
+
+export type SectionForTabs = {
+  id: string;
+  label: string;
+  xPct: number;
+  yPct: number;
+  color?: string | null;
 };
 
 export type LayoutForTabs = {
@@ -22,6 +88,7 @@ export type LayoutForTabs = {
   sourceImageHeight: number;
   tables: TableForTabs[];
   landmarks?: Array<{ id: string; label: string; xPct: number; yPct: number }>;
+  sections?: SectionForTabs[];
 };
 
 export type TemplateOption = {
@@ -127,6 +194,55 @@ export default function LayoutTab(props: {
         }).catch(() => {});
       }
 
+      // 5b. Persist detected sections + link AI-detected tables to their sections.
+      // sectionLabel on each parsed table tells us which section it belongs to.
+      type AiSection = { label?: string; xPct?: number; yPct?: number; polygon?: Array<{ x: number; y: number }> };
+      type AiTable = { label?: string; xPct?: number; yPct?: number; capacityEstimate?: number; sectionLabel?: string };
+      const aiSections = Array.isArray(aiData.sections) ? (aiData.sections as AiSection[]) : [];
+      if (aiSections.length > 0) {
+        // Build tableAssignments: persisted tableId → matched sectionLabel (resolved later via response)
+        const sectionsPayload = aiSections.map(s => ({
+          label: (s.label ?? "Section").trim(),
+          xPct: s.xPct ?? 50,
+          yPct: s.yPct ?? 50,
+          polygon: Array.isArray(s.polygon) && s.polygon.length >= 3 ? s.polygon : null,
+        }));
+        const secRes = await fetch(`/api/events/${eventId}/sections`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sections: sectionsPayload, replace: true }),
+        });
+        if (secRes.ok) {
+          const secData = await secRes.json();
+          // Map persisted section labels → ids
+          const sectionIdByLabel = new Map<string, string>(
+            (secData.sections as Array<{ id: string; label: string }>).map(s => [s.label.toLowerCase(), s.id]),
+          );
+          // Map AI table label → its parsed sectionLabel
+          const labelToSection = new Map<string, string>(
+            (aiTables as AiTable[])
+              .filter(t => t.label && t.sectionLabel)
+              .map(t => [t.label!.toLowerCase(), t.sectionLabel!.toLowerCase()]),
+          );
+          // Persisted tables came back from the /tables PUT above
+          const tableAssignments: Record<string, string | null> = {};
+          for (const persistedTable of pd.tables as Array<{ id: string; label: string }>) {
+            const sectionLabel = labelToSection.get(persistedTable.label.toLowerCase());
+            if (!sectionLabel) continue;
+            const sectionId = sectionIdByLabel.get(sectionLabel);
+            if (!sectionId) continue;
+            tableAssignments[persistedTable.id] = sectionId;
+          }
+          if (Object.keys(tableAssignments).length > 0) {
+            await fetch(`/api/events/${eventId}/sections`, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ sections: sectionsPayload, tableAssignments }),
+            }).catch(() => {});
+          }
+        }
+      }
+
       // 6. Auto-generate every QR the floor plan implies: one per detected landmark + one per table.
       //    The system already knows every location — no need to ask the planner.
       const qrGenRes = await fetch(`/api/events/${eventId}/qr/bulk-auto`, { method: "POST" });
@@ -150,8 +266,13 @@ export default function LayoutTab(props: {
         if (data?.persistedCount) toast.success(`Directions ready (${data.persistedCount} sentences across ${data.results?.length ?? 0} origins).`);
       }).catch(() => {});
 
+      const detectedParts = [
+        `${pd.tables.length} tables`,
+        aiLandmarks.length ? `${aiLandmarks.length} landmarks` : null,
+        aiSections.length ? `${aiSections.length} sections` : null,
+      ].filter(Boolean).join(" + ");
       toast.success(
-        `Detected ${pd.tables.length} tables${aiLandmarks.length ? ` + ${aiLandmarks.length} landmarks` : ""}` +
+        `Detected ${detectedParts}` +
         (qrCreated ? `. Auto-generated ${qrCreated} QR codes — see the QR tab.` : ".")
       );
       onChange({ ...createData.layout, tables: pd.tables });
@@ -364,6 +485,7 @@ function ReviewTable({
             yPct: t.yPct,
             directionsText: t.directionsText,
             notes: t.notes,
+            sectionId: t.sectionId ?? null,
           })),
           deleteIds: deletedIds,
         }),
@@ -464,18 +586,27 @@ function ReviewTable({
                 <tr>
                   <th className="text-left px-3 py-2">Label</th>
                   <th className="text-left px-3 py-2">Cap.</th>
+                  <th className="text-left px-3 py-2">Section</th>
                   <th className="text-left px-3 py-2">Directions</th>
                   <th className="px-2 py-2" />
                 </tr>
               </thead>
               <tbody>
                 {tables.map((t, idx) => (
-                  <tr key={t.id ?? idx} className="border-t border-[var(--color-border-soft)] hover:bg-[var(--color-bg-elev-2)]">
+                  <tr key={t.id ?? idx} className="border-t border-[var(--color-border-soft)] hover:bg-[var(--color-surface-2)]">
                     <td className="px-3 py-2 w-[100px]">
                       <input className="input h-9" value={t.label} onChange={e => updateTable(idx, { label: e.target.value })} maxLength={40} />
                     </td>
                     <td className="px-3 py-2 w-[80px]">
                       <input className="input h-9" type="number" min={1} max={40} value={t.capacity} onChange={e => updateTable(idx, { capacity: parseInt(e.target.value || "0", 10) || 0 })} />
+                    </td>
+                    <td className="px-3 py-2 w-[160px]">
+                      <SectionPicker
+                        eventId={eventId}
+                        sections={layout.sections ?? []}
+                        currentId={t.sectionId ?? null}
+                        onChange={(sectionId) => updateTable(idx, { sectionId })}
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <input className="input h-9" value={t.directionsText ?? ""} onChange={e => updateTable(idx, { directionsText: e.target.value || null })} placeholder="(optional)" maxLength={200} />
@@ -486,7 +617,7 @@ function ReviewTable({
                   </tr>
                 ))}
                 {tables.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center text-[var(--color-fg-muted)]">No tables. Replace the plan to re-parse.</td></tr>
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--color-fg-muted)]">No tables. Replace the plan to re-parse.</td></tr>
                 )}
               </tbody>
             </table>

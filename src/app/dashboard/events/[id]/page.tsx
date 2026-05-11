@@ -26,6 +26,7 @@ export default async function EventPage({
         include: {
           tables: { orderBy: { label: "asc" } },
           landmarks: { orderBy: { label: "asc" } },
+          sections: { orderBy: { label: "asc" } },
         },
       },
       guests: { orderBy: [{ lastName: "asc" }, { firstName: "asc" }], include: { assignedSeat: true } },
@@ -87,12 +88,20 @@ export default async function EventPage({
             yPct: t.yPct,
             directionsText: t.directionsText,
             notes: t.notes,
+            sectionId: t.sectionId,
           })),
           landmarks: event.layout.landmarks.map(l => ({
             id: l.id,
             label: l.label,
             xPct: l.xPct,
             yPct: l.yPct,
+          })),
+          sections: event.layout.sections.map(s => ({
+            id: s.id,
+            label: s.label,
+            xPct: s.xPct,
+            yPct: s.yPct,
+            color: s.color,
           })),
         } : null}
         guests={event.guests.map(g => ({

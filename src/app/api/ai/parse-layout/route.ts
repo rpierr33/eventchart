@@ -8,7 +8,7 @@ const schema = z.object({
   mediaType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
 });
 
-const SYSTEM = `You analyze event venue floor plans (image) and identify tables.
+const SYSTEM = `You analyze event venue floor plans (image) and identify tables, landmarks, and sections.
 
 Output STRICT JSON only:
 {
@@ -18,20 +18,31 @@ Output STRICT JSON only:
       "shape": "round" | "rectangle" | "square" | "oval",
       "capacityEstimate": 8,
       "xPct": 45.2,
-      "yPct": 30.1
+      "yPct": 30.1,
+      "sectionLabel": "Bride's Side"   // optional — match a section.label if the table sits inside one
     }
   ],
   "landmarks": [
     { "label": "Entrance" | "Bar" | "Stage" | "Restrooms" | "Dance Floor", "xPct": 50, "yPct": 90 }
+  ],
+  "sections": [
+    {
+      "label": "Bride's Side" | "Groom's Side" | "VIP" | "Family" | "Friends" | "Kids" | "Head Table" | etc.,
+      "xPct": 25,    // centroid of the section
+      "yPct": 50,
+      "polygon": [{"x":10,"y":20},{"x":40,"y":20},{"x":40,"y":80},{"x":10,"y":80}]  // optional, 3-12 vertices
+    }
   ]
 }
 
 Rules:
-- xPct/yPct are percentages of the image width/height (0..100), pointing to the visual CENTER of each table.
+- xPct/yPct are percentages of the image width/height (0..100), pointing to the visual CENTER of each item.
 - capacityEstimate based on shape/size (round 60in = 8 seats, round 72in = 10-12, rectangle for 6-10, etc.). Use 8 if unsure.
 - Number tables 1..N if no labels visible.
 - Skip chairs, props, and decor — only seating tables.
-- Include obvious wayfinding landmarks if visible.
+- Include obvious wayfinding landmarks if visible (entrance, bar, stage, restrooms, dance floor).
+- SECTIONS are logical groupings: if the plan shows labels like "Bride's Side", "Groom's Side", "VIP", "Family", "Kids", "Head Table", or visible dividers/zones, return them. For each table, set sectionLabel to the matching section's label so they link up. Polygon is optional — if you can outline the section's boundary (3-12 vertices clockwise), include it; otherwise omit and we'll derive from member-table positions.
+- If the plan has NO visible sections, return sections: [].
 - Do NOT include prose. JSON only.`;
 
 export async function POST(req: Request) {
@@ -69,7 +80,7 @@ export async function POST(req: Request) {
   }
 }
 
-function extractJson(text: string): { tables?: unknown[]; landmarks?: unknown[] } | null {
+function extractJson(text: string): { tables?: unknown[]; landmarks?: unknown[]; sections?: unknown[] } | null {
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = (fence ? fence[1] : text).trim();
   try { return JSON.parse(raw); } catch { /* fallback */ }

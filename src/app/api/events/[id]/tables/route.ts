@@ -10,6 +10,7 @@ const tableSchema = z.object({
   yPct: z.number().min(0).max(100),
   directionsText: z.string().max(200).nullable().optional(),
   notes: z.string().max(400).nullable().optional(),
+  sectionId: z.string().nullable().optional(),
 });
 
 const bulkSchema = z.object({
@@ -56,15 +57,19 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       await tx.table.deleteMany({ where: { id: { in: parsed.data.deleteIds }, layoutId: ev.layout!.id } });
     }
     for (const t of parsed.data.tables) {
+      const common = {
+        label: t.label,
+        capacity: t.capacity,
+        xPct: t.xPct,
+        yPct: t.yPct,
+        directionsText: t.directionsText ?? null,
+        notes: t.notes ?? null,
+        ...(t.sectionId !== undefined ? { sectionId: t.sectionId } : {}),
+      };
       if (t.id) {
-        await tx.table.update({
-          where: { id: t.id },
-          data: { label: t.label, capacity: t.capacity, xPct: t.xPct, yPct: t.yPct, directionsText: t.directionsText ?? null, notes: t.notes ?? null },
-        });
+        await tx.table.update({ where: { id: t.id }, data: common });
       } else {
-        await tx.table.create({
-          data: { layoutId: ev.layout!.id, label: t.label, capacity: t.capacity, xPct: t.xPct, yPct: t.yPct, directionsText: t.directionsText ?? null, notes: t.notes ?? null },
-        });
+        await tx.table.create({ data: { layoutId: ev.layout!.id, ...common } });
       }
     }
     return tx.table.findMany({ where: { layoutId: ev.layout!.id }, orderBy: { label: "asc" } });

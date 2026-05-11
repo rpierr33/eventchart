@@ -147,11 +147,32 @@ model Layout {
   event              Event?   @relation("EventLayout")
   tables             Table[]
   landmarks          Landmark[]
+  sections           Section[]
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([templateOwnerId])
+}
+
+model Section {
+  id        String   @id @default(cuid())
+  layoutId  String
+  layout    Layout   @relation(fields: [layoutId], references: [id], onDelete: Cascade)
+
+  label     String
+  xPct      Float
+  yPct      Float
+  color     String?
+  polygon   Json?    // optional polygon vertices: [{x,y}, ...] for polygon-mode
+
+  tables    Table[]
+  qrCodes   QRCode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([layoutId])
 }
 
 model Landmark {
@@ -178,6 +199,12 @@ model Table {
 
   xPct            Float
   yPct            Float
+
+  // Optional: a Table can belong to a Section (e.g., "Bride's Side", "VIP",
+  // "Kids"). Sections group tables for QR/printing/wayfinding without
+  // changing per-table seat assignments.
+  sectionId       String?
+  section         Section?  @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   /// @deprecated Use TableDirection. Kept for backward-compat; new code reads from TableDirection.
   directionsText  String?
@@ -273,6 +300,11 @@ model QRCode {
   tableId         String?
   table           Table?  @relation("TableQRs", fields: [tableId], references: [id], onDelete: SetNull)
 
+  // Optional: anchor QR to a Section instead of a single Table. Used for
+  // "one QR per section" printing on large events.
+  sectionId       String?
+  section         Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
   qrImageUrl      String?
 
   directions      TableDirection[]
@@ -281,6 +313,7 @@ model QRCode {
 
   @@index([eventId])
   @@index([tableId])
+  @@index([sectionId])
 }
 
 model WalkInRequest {
