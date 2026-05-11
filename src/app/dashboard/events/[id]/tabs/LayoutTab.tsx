@@ -136,6 +136,20 @@ export default function LayoutTab(props: {
         qrCreated = qrData.created ?? 0;
       }
 
+      // 7. Auto-generate origin-aware wayfinding directions for every (QR × Table) pair.
+      //    Fire and forget — Claude vision is slow (~5s per origin) and could time out
+      //    on large plans. The planner can also manually re-run via the QR tab.
+      toast.info("Generating directions in the background — may take a couple of minutes for large plans.");
+      void fetch(`/api/ai/wayfinding`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ eventId }),
+      }).then(async (r) => {
+        if (!r.ok) return;
+        const data = await r.json().catch(() => null);
+        if (data?.persistedCount) toast.success(`Directions ready (${data.persistedCount} sentences across ${data.results?.length ?? 0} origins).`);
+      }).catch(() => {});
+
       toast.success(
         `Detected ${pd.tables.length} tables${aiLandmarks.length ? ` + ${aiLandmarks.length} landmarks` : ""}` +
         (qrCreated ? `. Auto-generated ${qrCreated} QR codes — see the QR tab.` : ".")

@@ -66,9 +66,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       select: { id: true },
     });
 
-    // If event already had a layout, delete it (cascade tables/seats)
+    // If event already had a layout, delete it (cascade tables/seats) AND
+    // delete ALL QRCodes for this event — the old QRs reference old table
+    // coords or labels that no longer exist on the new plan. Better to
+    // rebuild via bulk-auto than leave orphan QRs with stale anchors.
     if (ev.layoutId && ev.layoutId !== newLayout.id) {
-      await tx.event.update({ where: { id: eventId }, data: { layoutId: null } });
+      await tx.qRCode.deleteMany({ where: { eventId } });
+      // Also clear the omittedLandmarkLabels so the new plan's landmarks
+      // aren't silently filtered by names from the old plan.
+      await tx.event.update({
+        where: { id: eventId },
+        data: { layoutId: null, omittedLandmarkLabels: [] },
+      });
       await tx.layout.delete({ where: { id: ev.layoutId } }).catch(() => {});
     }
     await tx.event.update({ where: { id: eventId }, data: { layoutId: newLayout.id } });

@@ -4,6 +4,11 @@ import { db } from "@/lib/db";
 import { requireUserId } from "@/lib/auth-helpers";
 import { getAnthropic, MODEL } from "@/lib/anthropic";
 
+// Big plans (20+ QRs × 18+ tables) need the full Vercel function timeout.
+// Default is 60s on some plans — bump to 300s (max for Hobby/Pro).
+export const maxDuration = 300;
+export const runtime = "nodejs";
+
 const schema = z.object({
   eventId: z.string(),
   // optional: limit to a single QR origin (otherwise generate for every QR + a null-origin default)
@@ -85,11 +90,11 @@ export async function POST(req: Request) {
     } catch { /* fall through to heuristic */ }
   }
 
-  // Produce directions per origin
+  // Produce directions per origin — parallelized with concurrency cap so big plans
+  // (20+ origins) don't run sequentially and blow Vercel's function timeout.
   type Out = { fromQrId: string | null; directions: Array<{ tableId: string; directionsText: string }>; source: "claude" | "heuristic" };
-  const results: Out[] = [];
 
-  for (const origin of origins) {
+  async function processOrigin(origin: Origin): Promise<Out> {
     let directions: Array<{ tableId: string; directionsText: string }> = [];
     let source: "claude" | "heuristic" = "heuristic";
 
@@ -121,11 +126,10 @@ export async function POST(req: Request) {
             source = "claude";
           }
         }
-      } catch { /* fall through */ }
+      } catch { /* fall through to heuristic */ }
     }
 
     if (directions.length === 0) {
-      // Heuristic fallback per origin
       directions = tables.map(t => ({
         tableId: t.id,
         directionsText: heuristicSentence(origin.xPct, origin.yPct, t.xPct, t.yPct, t.label, origin.label),
@@ -133,7 +137,17 @@ export async function POST(req: Request) {
       source = "heuristic";
     }
 
-    results.push({ fromQrId: origin.id, directions, source });
+    return { fromQrId: origin.id, directions, source };
+  }
+
+  // Concurrency cap of 5 — balances Anthropic rate-limit headroom with throughput.
+  // 20 origins × 5s/call sequential = 100s. With 5-wide parallelism = ~20s.
+  const CONCURRENCY = 5;
+  const results: Out[] = [];
+  for (let i = 0; i < origins.length; i += CONCURRENCY) {
+    const batch = origins.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.all(batch.map(processOrigin));
+    results.push(...batchResults);
   }
 
   // Persist — delete-then-create per origin so partial unique index (tableId where fromQrId IS NULL)

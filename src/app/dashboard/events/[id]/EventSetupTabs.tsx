@@ -43,8 +43,19 @@ export default function EventSetupTabs(props: {
   }, [params, router]);
 
   const reloadFromServer = useCallback(async () => {
+    // Refresh state from /state which has the canonical post-write view.
+    // Server-render via router.refresh() also fires so server components rerender.
+    try {
+      const r = await fetch(`/api/events/${event.id}/state`);
+      if (r.ok) {
+        const s = await r.json();
+        if (s.qrCodes) setQrCodes(s.qrCodes);
+        if (s.guests) setGuests(s.guests);
+        if (s.layout) setLayout(prev => prev ? { ...prev, tables: s.layout.tables } : prev);
+      }
+    } catch { /* ignore */ }
     router.refresh();
-  }, [router]);
+  }, [router, event.id]);
 
   const stats = useMemo(() => ({
     tables: layout?.tables.length ?? 0,
