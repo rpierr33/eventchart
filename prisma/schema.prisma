@@ -19,10 +19,27 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  events    Event[]
-  templates Layout[] @relation("UserTemplates")
-  accounts  Account[]
-  sessions  Session[]
+  events            Event[]
+  templates         Layout[]             @relation("UserTemplates")
+  accounts          Account[]
+  sessions          Session[]
+  pushSubscriptions PushSubscription[]
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint  String
+  p256dh    String
+  auth      String
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, endpoint])
+  @@index([userId])
 }
 
 model Account {

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { broadcast } from "@/lib/sse";
+import { sendPushToUser } from "@/lib/push";
+
+export const runtime = "nodejs";
 
 const schema = z.object({
   firstName: z.string().max(40).optional().default(""),
@@ -52,7 +55,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     });
   }
 
-  // Require host approval — queue
+  // Require host approval — queue + push notification (spec: "required, not optional")
   const wir = await db.walkInRequest.create({
     data: {
       eventId: event.id,
@@ -63,6 +66,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     },
   });
   broadcast(event.id, { type: "walkin-pending", walkInId: wir.id });
+  // Fire-and-forget push so the host's phone wakes the screen even when the live view is closed.
+  // Don't await — push timing is independent of the guest's response.
+  void sendPushToUser(event.hostUserId, {
+    title: `Walk-in: ${wir.firstName} ${wir.lastName}`,
+    body: `${event.name} — tap to approve or decline.`,
+    url: `/dashboard/events/${event.id}/live`,
+    tag: `walkin-${event.id}`,
+  });
   return NextResponse.json({ status: "QUEUED", walkInId: wir.id });
 }
 

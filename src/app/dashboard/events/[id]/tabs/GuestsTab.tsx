@@ -52,6 +52,10 @@ export default function GuestsTab(props: {
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
+  // AI-parsed guests waiting for human review (file or paste).
+  // Spec: "Never auto-save AI-parsed guest data without human review."
+  type AIParsed = { firstName: string; lastName: string; tableLabel?: string | null; groupTag?: string | null; notes?: string | null; plusOneOf?: string | null; isPlaceholder?: boolean };
+  const [aiDraft, setAiDraft] = useState<AIParsed[] | null>(null);
 
   async function handleFileUpload(file: File) {
     setUploading(true);
@@ -71,7 +75,6 @@ export default function GuestsTab(props: {
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
         const buf = await file.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data: buf }).promise;
-        // Concatenate text from all pages
         let allText = "";
         for (let p = 1; p <= pdf.numPages; p++) {
           const page = await pdf.getPage(p);
@@ -113,21 +116,27 @@ export default function GuestsTab(props: {
       if (!res.ok) throw new Error(data?.error ?? "AI parse failed");
       const list = Array.isArray(data.guests) ? data.guests : [];
       if (list.length === 0) { toast.warning("No guests found"); return; }
-
-      const saveRes = await fetch(`/api/events/${eventId}/guests/bulk`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ guests: list }),
-      });
-      const saveData = await saveRes.json();
-      if (!saveRes.ok) throw new Error(saveData?.error ?? "Save failed");
-      toast.success(`Imported ${saveData.count} guests. ${saveData.assigned} auto-seated.`);
-      reload();
+      // Route through the review modal — DO NOT commit to DB without human approval.
+      setAiDraft(list);
+      toast.success(`AI extracted ${list.length} guests. Review and edit before saving.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
+  }
+
+  async function commitAiDraft(rows: AIParsed[]) {
+    const res = await fetch(`/api/events/${eventId}/guests/bulk`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ guests: rows }),
+    });
+    const data = await res.json();
+    if (!res.ok) { toast.error(data?.error ?? "Save failed"); return; }
+    toast.success(`Imported ${data.count} guests. ${data.assigned ?? 0} auto-seated.`);
+    setAiDraft(null);
+    reload();
   }
 
   return (
@@ -202,6 +211,13 @@ export default function GuestsTab(props: {
       {editing && <AddGuestModal eventId={eventId} guests={guests} editing={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
       {showImport && <CsvImportModal eventId={eventId} onClose={() => setShowImport(false)} onSaved={() => { setShowImport(false); reload(); }} />}
       {showAI && <AIImportModal eventId={eventId} onClose={() => setShowAI(false)} onSaved={() => { setShowAI(false); reload(); }} />}
+      {aiDraft && (
+        <AIReviewModal
+          rows={aiDraft}
+          onCancel={() => setAiDraft(null)}
+          onCommit={commitAiDraft}
+        />
+      )}
     </div>
   );
 }
@@ -526,6 +542,64 @@ function AIImportModal({ eventId, onClose, onSaved }: { eventId: string; onClose
           </div>
         </div>
       )}
+    </Modal>
+  );
+}
+
+// Generic review-before-commit modal used for FILE-uploaded AI parses (CSV/PDF/image/text).
+// Spec: "Never auto-save AI-parsed guest data without human review."
+function AIReviewModal({ rows, onCancel, onCommit }: {
+  rows: Array<{ firstName: string; lastName: string; tableLabel?: string | null; groupTag?: string | null; notes?: string | null; plusOneOf?: string | null; isPlaceholder?: boolean }>;
+  onCancel: () => void;
+  onCommit: (rows: Array<{ firstName: string; lastName: string; tableLabel?: string | null; groupTag?: string | null; notes?: string | null; plusOneOf?: string | null; isPlaceholder?: boolean }>) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(rows);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    await onCommit(draft);
+    setBusy(false);
+  }
+
+  return (
+    <Modal onClose={onCancel} title="Review AI-parsed guests" wide>
+      <p className="text-sm text-[var(--color-fg-muted)] mb-3">
+        {draft.length} guest{draft.length !== 1 ? "s" : ""} extracted. Edit anything wrong, then save.
+        A wrong last name means a guest can&apos;t find their table — your eyes are the safety net.
+      </p>
+      <div className="card overflow-auto max-h-96">
+        <table className="w-full text-sm">
+          <thead className="text-xs text-[var(--color-fg-muted)] uppercase">
+            <tr>
+              <th className="text-left px-3 py-2">First</th>
+              <th className="text-left px-3 py-2">Last</th>
+              <th className="text-left px-3 py-2">Table</th>
+              <th className="text-left px-3 py-2">Group</th>
+              <th className="text-left px-3 py-2">Notes</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {draft.map((g, i) => (
+              <tr key={i} className="border-t border-[var(--color-border-soft)]">
+                <td className="px-3 py-1"><input className="input h-9" value={g.firstName} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, firstName: e.target.value } : r))} /></td>
+                <td className="px-3 py-1"><input className="input h-9" value={g.lastName} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, lastName: e.target.value } : r))} /></td>
+                <td className="px-3 py-1"><input className="input h-9 w-20" value={g.tableLabel ?? ""} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, tableLabel: e.target.value || null } : r))} placeholder="T7" /></td>
+                <td className="px-3 py-1"><input className="input h-9" value={g.groupTag ?? ""} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, groupTag: e.target.value || null } : r))} /></td>
+                <td className="px-3 py-1"><input className="input h-9" value={g.notes ?? ""} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, notes: e.target.value || null } : r))} /></td>
+                <td className="px-3 py-1 text-right"><button onClick={() => setDraft(prev => prev.filter((_, j) => j !== i))} className="btn btn-danger h-8 px-2 text-xs">Remove</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center gap-2 mt-3">
+        <button onClick={save} disabled={busy || draft.length === 0} className="btn btn-primary flex-1 h-11">
+          {busy ? "Saving…" : `Save ${draft.length} guests`}
+        </button>
+        <button onClick={onCancel} disabled={busy} className="btn h-11">Cancel</button>
+      </div>
     </Modal>
   );
 }

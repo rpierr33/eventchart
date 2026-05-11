@@ -1,5 +1,5 @@
-// eventChart Service Worker — offline caching for guest lookup pages
-const CACHE = "evcd-v1";
+// eventChart Service Worker — offline caching + Web Push for walk-in alerts
+const CACHE = "evcd-v2";
 const ESSENTIAL = ["/", "/manifest.webmanifest", "/icon-192.svg", "/icon-512.svg"];
 
 self.addEventListener("install", (event) => {
@@ -28,7 +28,6 @@ self.addEventListener("fetch", (event) => {
 
   if (!isPublicEvent && !isPublicApi && !isLayoutAsset && !isQrPng) return;
 
-  // Cache-first for static layout images and QR PNGs
   if (isLayoutAsset || isQrPng) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {
@@ -46,7 +45,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network-first with cache fallback for /e/ pages and /api/public/ data
   event.respondWith(
     (async () => {
       try {
@@ -59,7 +57,6 @@ self.addEventListener("fetch", (event) => {
       } catch {
         const cached = await caches.match(req);
         if (cached) return cached;
-        // Offline fallback for lookup page
         if (isPublicEvent) {
           const fallback = await caches.match("/");
           if (fallback) return fallback;
@@ -67,5 +64,46 @@ self.addEventListener("fetch", (event) => {
         return new Response("Offline", { status: 503 });
       }
     })()
+  );
+});
+
+// Web Push handler — wakes the host phone when a walk-in needs approval.
+// Server sends JSON: { title, body, url, tag }
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: "eventChart", body: event.data.text() };
+  }
+  const { title = "eventChart", body = "", url = "/", tag } = payload;
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag,
+      icon: "/icon-192.svg",
+      badge: "/icon-192.svg",
+      data: { url },
+      requireInteraction: true, // stays on screen until host taps — walk-in approvals can't be missed
+      vibrate: [120, 60, 120],
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url ?? "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Focus an existing tab on the same path if possible
+      for (const c of clientList) {
+        const u = new URL(c.url);
+        if (u.pathname === target) {
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
   );
 });

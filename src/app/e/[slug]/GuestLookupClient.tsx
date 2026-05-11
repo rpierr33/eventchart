@@ -43,6 +43,16 @@ type LookupResult =
   | { kind: "none" };
 
 const SESSION_KEY = (slug: string) => `evcd_${slug}_unlocked`;
+const CACHE_KEY  = (slug: string) => `evcd_${slug}_guests_v1`;
+
+// Client-side offline fallback: match a last name against the locally-cached guest list.
+function offlineLookup(guests: GuestMatch[], lastName: string): LookupResult {
+  const needle = lastName.trim().toLowerCase();
+  const hits = guests.filter(g => g.lastName.toLowerCase() === needle);
+  if (hits.length === 0) return { kind: "none" };
+  if (hits.length === 1) return { kind: "single", match: hits[0] };
+  return { kind: "matches", matches: hits };
+}
 
 export default function GuestLookupClient(props: {
   slug: string;
@@ -65,6 +75,26 @@ export default function GuestLookupClient(props: {
     }
   }, [event.lookupPrivacy, slug]);
 
+  // PWA offline-first: pre-cache the full guest list on first load. Spec line 171.
+  // Only for PUBLIC events — code-protected events explicitly opt out server-side.
+  useEffect(() => {
+    if (event.lookupPrivacy !== "PUBLIC") return;
+    const ctrl = new AbortController();
+    fetch(`/api/public/${slug}/all-guests${qr?.id ? `?fromQrId=${qr.id}` : ""}`, { signal: ctrl.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data || !Array.isArray(data.guests)) return;
+        try {
+          window.localStorage.setItem(CACHE_KEY(slug), JSON.stringify({
+            guests: data.guests,
+            cachedAt: data.cachedAt ?? new Date().toISOString(),
+          }));
+        } catch { /* quota — ignore */ }
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [event.lookupPrivacy, slug, qr]);
+
   const lookup = useCallback(async (ln: string) => {
     setBusy(true);
     try {
@@ -86,11 +116,58 @@ export default function GuestLookupClient(props: {
       }
       setStage("result");
     } catch (e) {
+      // Network error → try the offline-cached list before giving up
+      try {
+        const raw = window.localStorage.getItem(CACHE_KEY(slug));
+        if (raw) {
+          const cached = JSON.parse(raw) as { guests: GuestMatch[] };
+          const r = offlineLookup(cached.guests, ln);
+          setResult(r);
+          if (r.kind === "single") setChosen(r.match);
+          setStage("result");
+          toast.info("Offline mode — using last cached guest list.");
+          return;
+        }
+      } catch { /* fall through to error toast */ }
       toast.error(e instanceof Error ? e.message : "Lookup failed");
     } finally {
       setBusy(false);
     }
-  }, [slug]);
+  }, [slug, qr]);
+
+  // Live updates: when the planner moves a guest, re-fetch if the displayed match is one of the moved guests.
+  useEffect(() => {
+    if (stage !== "result" || !chosen) return;
+    const es = new EventSource(`/api/public/${slug}/stream`);
+    es.onmessage = async (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type === "guest-moved" && Array.isArray(data.guestIds) && data.guestIds.includes(chosen.id)) {
+          // Re-fetch the lookup so we get fresh tableLabel + directions
+          const res = await fetch(`/api/public/${slug}/lookup`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ lastName: chosen.lastName || lastName, fromQrId: qr?.id ?? null }),
+          });
+          if (!res.ok) return;
+          const fresh = await res.json();
+          if (fresh.kind === "single") {
+            setChosen(fresh.match);
+            setResult(fresh);
+            toast.info("Your table just changed — refreshed.");
+          } else if (fresh.kind === "matches") {
+            const updated = (fresh.matches as GuestMatch[]).find(m => m.id === chosen.id);
+            if (updated) {
+              setChosen(updated);
+              toast.info("Your table just changed — refreshed.");
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    es.onerror = () => { es.close(); };
+    return () => es.close();
+  }, [stage, chosen, slug, qr, lastName]);
 
   async function onSubmitLastName(e: React.FormEvent) {
     e.preventDefault();

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireUserId } from "@/lib/auth-helpers";
+import { broadcast } from "@/lib/sse";
 
 const schema = z.object({
   guestIds: z.array(z.string()).min(1).max(2000),
@@ -25,5 +26,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     where: { id: { in: parsed.data.guestIds }, eventId: id },
     data: { assignedTableId: parsed.data.tableId },
   });
+  // Notify any open guest-lookup pages so they refresh if one of these guests is on screen.
+  broadcast(id, { type: "guest-moved", guestIds: parsed.data.guestIds, tableId: parsed.data.tableId });
   return NextResponse.json({ ok: true });
 }

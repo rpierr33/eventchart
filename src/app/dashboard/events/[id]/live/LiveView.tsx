@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { fmtDateTime } from "@/lib/utils";
+import PushOptIn from "@/components/PushOptIn";
 
 type TableT = { id: string; label: string; capacity: number; xPct: number; yPct: number; directionsText: string | null };
 type GuestT = {
@@ -35,6 +36,8 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showWalkIn, setShowWalkIn] = useState(false);
+  const [showMove, setShowMove] = useState(false);
+  const [showNoShow, setShowNoShow] = useState(false);
   const [reassigning, setReassigning] = useState<GuestT | null>(null);
   const [walkInApprove, setWalkInApprove] = useState<WalkInT | null>(null);
   const lastPendingCount = useRef(0);
@@ -116,6 +119,7 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
         <div className="flex items-center justify-between gap-2">
           <Link href={`/dashboard/events/${event.id}`} className="text-sm text-[var(--color-fg-muted)]">← Setup</Link>
           <div className="flex items-center gap-2 text-sm">
+            <PushOptIn />
             <StatusPill status={event.status} />
             <a href={`/e/${publicSlug}`} target="_blank" rel="noreferrer" className="badge badge-blue">Guest lookup ↗</a>
           </div>
@@ -132,6 +136,8 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
 
       <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]">
         <button onClick={() => setShowSearch(true)} className="btn h-10 text-sm">🔍 Find guest</button>
+        <button onClick={() => setShowMove(true)} className="btn h-10 text-sm">↔ Move guest</button>
+        <button onClick={() => setShowNoShow(true)} className="btn h-10 text-sm">⏱ Mark no-show</button>
         <button onClick={() => setShowWalkIn(true)} className="btn h-10 text-sm">+ Walk-in</button>
         {pendingWalkIns.length > 0 && (
           <button onClick={() => setWalkInApprove(pendingWalkIns[0])} className="btn btn-primary h-10 text-sm relative">
@@ -216,6 +222,29 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
           tables={layout?.tables ?? []}
           onClose={() => setShowSearch(false)}
           onPickGuest={(g) => { setShowSearch(false); setReassigning(g); }}
+        />
+      )}
+      {showMove && (
+        <SearchModal
+          title="Move which guest?"
+          guests={guests}
+          tables={layout?.tables ?? []}
+          onClose={() => setShowMove(false)}
+          onPickGuest={(g) => { setShowMove(false); setReassigning(g); }}
+        />
+      )}
+      {showNoShow && (
+        <SearchModal
+          title="Mark which guest as no-show?"
+          guests={guests.filter(g => !g.checkedInAt && !g.noShowFlaggedAt)}
+          tables={layout?.tables ?? []}
+          onClose={() => setShowNoShow(false)}
+          onPickGuest={async (g) => {
+            setShowNoShow(false);
+            await fetch(`/api/events/${eventId}/guests/${g.id}/noshow`, { method: "POST" });
+            refresh();
+            toast.success(`${g.firstName} ${g.lastName} marked no-show — seat freed.`);
+          }}
         />
       )}
       {showWalkIn && (
@@ -323,14 +352,15 @@ function TablePanel({
   );
 }
 
-function SearchModal({ guests, tables, onClose, onPickGuest }: {
-  guests: GuestT[]; tables: TableT[]; onClose: () => void; onPickGuest: (g: GuestT) => void;
+function SearchModal({ guests, tables, onClose, onPickGuest, title }: {
+  guests: GuestT[]; tables: TableT[]; onClose: () => void; onPickGuest: (g: GuestT) => void; title?: string;
 }) {
   const [q, setQ] = useState("");
   const filtered = guests.filter(g => `${g.firstName} ${g.lastName}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 50);
   return (
     <div className="fixed inset-0 bg-black/70 z-40 flex items-start justify-center p-4 pt-20" onClick={onClose}>
       <div className="card w-full max-w-md p-4" onClick={e => e.stopPropagation()}>
+        {title && <div className="text-[13px] font-medium text-[var(--color-fg-muted)] mb-2 px-1">{title}</div>}
         <input autoFocus className="input h-12 text-lg" placeholder="Search guest…" value={q} onChange={e => setQ(e.target.value)} />
         <ul className="mt-2 max-h-[60vh] overflow-auto">
           {filtered.map(g => {
