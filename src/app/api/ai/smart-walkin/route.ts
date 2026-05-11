@@ -44,14 +44,15 @@ export async function POST(req: Request) {
   if (!walkIn || walkIn.eventId !== event.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Heuristic: same last name on a table > matching groupTag > most open seats > first open
-  const sameSurname = event.layout.tables.find(t =>
-    t.guests.some(g => g.lastName.toLowerCase() === walkIn.lastName.toLowerCase() && walkIn.lastName.length > 0)
+  type TableWithGuests = (typeof event.layout.tables)[number];
+  const sameSurname = event.layout.tables.find((t: TableWithGuests) =>
+    t.guests.some((g) => g.lastName.toLowerCase() === walkIn.lastName.toLowerCase() && walkIn.lastName.length > 0)
     && t.guests.length < t.capacity
   );
   const heuristicChoice = sameSurname?.id ??
     event.layout.tables
-      .filter(t => t.guests.length < t.capacity)
-      .sort((a, b) => (b.capacity - b.guests.length) - (a.capacity - a.guests.length))[0]?.id ?? null;
+      .filter((t: TableWithGuests) => t.guests.length < t.capacity)
+      .sort((a: TableWithGuests, b: TableWithGuests) => (b.capacity - b.guests.length) - (a.capacity - a.guests.length))[0]?.id ?? null;
 
   const anthropic = getAnthropic();
   if (!anthropic || !heuristicChoice) {
