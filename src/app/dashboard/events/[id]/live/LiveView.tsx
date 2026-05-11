@@ -5,6 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { fmtDateTime } from "@/lib/utils";
 import PushOptIn from "@/components/PushOptIn";
+import { queuedFetch, installQueueDrain, pendingCount } from "@/lib/offline-queue";
 
 type TableT = { id: string; label: string; capacity: number; xPct: number; yPct: number; directionsText: string | null };
 type GuestT = {
@@ -50,6 +51,18 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
   }, [eventId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Install the offline-write replay handler on mount.
+  useEffect(() => {
+    installQueueDrain((msg) => {
+      toast.success(msg);
+      refresh();
+    });
+    // Show count of pending offline actions if any survived from a prior session.
+    pendingCount().then((n) => {
+      if (n > 0) toast.info(`${n} offline action${n !== 1 ? "s" : ""} pending sync.`);
+    });
+  }, [refresh]);
 
   // Poll every 4s as the safety net
   useEffect(() => {
@@ -193,24 +206,28 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
           onClose={() => setSelectedTable(null)}
           onReassign={(g) => setReassigning(g)}
           onMarkNoShow={async (g) => {
-            await fetch(`/api/events/${eventId}/guests/${g.id}`, {
-              method: "PATCH",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({}),
+            const res = await queuedFetch(`/api/events/${eventId}/guests/${g.id}/noshow`, {
+              method: "POST",
+              description: `mark no-show: ${g.firstName} ${g.lastName}`,
             });
-            await fetch(`/api/events/${eventId}/guests/${g.id}/noshow`, { method: "POST" });
+            if (res.queued) toast.info("Offline — will sync when back online.");
             refresh();
           }}
           onCheckIn={async (g) => {
-            await fetch(`/api/public/${publicSlug}/checkin`, {
+            const res = await queuedFetch(`/api/public/${publicSlug}/checkin`, {
               method: "POST",
-              headers: { "content-type": "application/json" },
               body: JSON.stringify({ guestId: g.id }),
+              description: `check in: ${g.firstName} ${g.lastName}`,
             });
+            if (res.queued) toast.info("Offline — will sync when back online.");
             refresh();
           }}
           onUncheckIn={async (g) => {
-            await fetch(`/api/events/${eventId}/guests/${g.id}/uncheckin`, { method: "POST" });
+            const res = await queuedFetch(`/api/events/${eventId}/guests/${g.id}/uncheckin`, {
+              method: "POST",
+              description: `uncheck-in: ${g.firstName} ${g.lastName}`,
+            });
+            if (res.queued) toast.info("Offline — will sync when back online.");
             refresh();
           }}
         />
@@ -241,9 +258,14 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
           onClose={() => setShowNoShow(false)}
           onPickGuest={async (g) => {
             setShowNoShow(false);
-            await fetch(`/api/events/${eventId}/guests/${g.id}/noshow`, { method: "POST" });
+            const res = await queuedFetch(`/api/events/${eventId}/guests/${g.id}/noshow`, {
+              method: "POST",
+              description: `no-show: ${g.firstName} ${g.lastName}`,
+            });
             refresh();
-            toast.success(`${g.firstName} ${g.lastName} marked no-show — seat freed.`);
+            toast.success(res.queued
+              ? `${g.firstName} ${g.lastName} queued — will sync when back online.`
+              : `${g.firstName} ${g.lastName} marked no-show — seat freed.`);
           }}
         />
       )}
@@ -262,14 +284,14 @@ export default function LiveView(props: { eventId: string; eventName: string; pu
           guests={guests}
           onClose={() => setReassigning(null)}
           onSave={async (tableId) => {
-            await fetch(`/api/events/${eventId}/guests/assign`, {
+            const res = await queuedFetch(`/api/events/${eventId}/guests/assign`, {
               method: "POST",
-              headers: { "content-type": "application/json" },
               body: JSON.stringify({ guestIds: [reassigning.id], tableId }),
+              description: `move guest ${reassigning.firstName} ${reassigning.lastName}`,
             });
             setReassigning(null);
             refresh();
-            toast.success("Moved.");
+            toast.success(res.queued ? "Move queued — will sync when back online." : "Moved.");
           }}
         />
       )}
