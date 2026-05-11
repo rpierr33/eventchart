@@ -143,16 +143,36 @@ model Table {
   xPct            Float
   yPct            Float
 
+  /// @deprecated Use TableDirection. Kept for backward-compat; new code reads from TableDirection.
   directionsText  String?
   notes           String?
 
   seats           Seat[]
   guests          Guest[]  @relation("TableGuests")
+  qrCodes         QRCode[] @relation("TableQRs")
+  directions      TableDirection[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([layoutId])
+}
+
+model TableDirection {
+  id              String   @id @default(cuid())
+  tableId         String
+  table           Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  fromQrId        String?
+  fromQr          QRCode?  @relation(fields: [fromQrId], references: [id], onDelete: Cascade)
+
+  directionsText  String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tableId])
+  @@index([fromQrId])
 }
 
 model Seat {
@@ -208,14 +228,20 @@ model QRCode {
   event           Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   label           String
-  scanOriginXPct  Float?
-  scanOriginYPct  Float?
+  scanOriginXPct  Float
+  scanOriginYPct  Float
+
+  tableId         String?
+  table           Table?  @relation("TableQRs", fields: [tableId], references: [id], onDelete: SetNull)
 
   qrImageUrl      String?
+
+  directions      TableDirection[]
 
   createdAt       DateTime @default(now())
 
   @@index([eventId])
+  @@index([tableId])
 }
 
 model WalkInRequest {

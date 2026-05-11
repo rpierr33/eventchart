@@ -71,7 +71,7 @@ export default function GuestLookupClient(props: {
       const res = await fetch(`/api/public/${slug}/lookup`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lastName: ln.trim() }),
+        body: JSON.stringify({ lastName: ln.trim(), fromQrId: qr?.id ?? null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "Lookup failed");

@@ -99,6 +99,7 @@ export default async function EventPage({
           label: q.label,
           scanOriginXPct: q.scanOriginXPct,
           scanOriginYPct: q.scanOriginYPct,
+          tableId: q.tableId,
           qrImageUrl: q.qrImageUrl,
         }))}
         templates={templates.map(t => ({
