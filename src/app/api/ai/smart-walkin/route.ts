@@ -44,15 +44,17 @@ export async function POST(req: Request) {
   if (!walkIn || walkIn.eventId !== event.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Heuristic: same last name on a table > matching groupTag > most open seats > first open
-  type TableWithGuests = (typeof event.layout.tables)[number];
-  const sameSurname = event.layout.tables.find((t: TableWithGuests) =>
-    t.guests.some((g) => g.lastName.toLowerCase() === walkIn.lastName.toLowerCase() && walkIn.lastName.length > 0)
+  type GuestRow = { id: string; lastName: string; firstName: string; groupTag: string | null; notes: string | null };
+  type TableRow = { id: string; label: string; capacity: number; notes: string | null; guests: GuestRow[] };
+  const tables = event.layout.tables as TableRow[];
+  const sameSurname = tables.find((t: TableRow) =>
+    t.guests.some((g: GuestRow) => g.lastName.toLowerCase() === walkIn.lastName.toLowerCase() && walkIn.lastName.length > 0)
     && t.guests.length < t.capacity
   );
   const heuristicChoice = sameSurname?.id ??
-    event.layout.tables
-      .filter((t: TableWithGuests) => t.guests.length < t.capacity)
-      .sort((a: TableWithGuests, b: TableWithGuests) => (b.capacity - b.guests.length) - (a.capacity - a.guests.length))[0]?.id ?? null;
+    tables
+      .filter((t: TableRow) => t.guests.length < t.capacity)
+      .sort((a: TableRow, b: TableRow) => (b.capacity - b.guests.length) - (a.capacity - a.guests.length))[0]?.id ?? null;
 
   const anthropic = getAnthropic();
   if (!anthropic || !heuristicChoice) {
@@ -65,14 +67,14 @@ export async function POST(req: Request) {
 
   const payload = {
     walkIn: { firstName: walkIn.firstName, lastName: walkIn.lastName, notes: walkIn.notes },
-    tables: event.layout.tables.map(t => ({
+    tables: tables.map((t: TableRow) => ({
       id: t.id,
       label: t.label,
       capacity: t.capacity,
       notes: t.notes,
-      seated: t.guests.map(g => ({ firstName: g.firstName, lastName: g.lastName, groupTag: g.groupTag, notes: g.notes })),
+      seated: t.guests.map((g: GuestRow) => ({ firstName: g.firstName, lastName: g.lastName, groupTag: g.groupTag, notes: g.notes })),
       open: t.capacity - t.guests.length,
-    })).filter(t => t.open > 0),
+    })).filter((t: { open: number }) => t.open > 0),
   };
 
   try {
