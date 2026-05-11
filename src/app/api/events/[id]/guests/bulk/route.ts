@@ -11,6 +11,7 @@ const guestSchema = z.object({
   notes: z.string().max(400).nullable().optional(),
   plusOneOf: z.string().nullable().optional(),
   isPlaceholder: z.boolean().optional(),
+  isVip: z.boolean().optional(),
 });
 
 const schema = z.object({ guests: z.array(guestSchema).max(2000) });
@@ -57,6 +58,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         notes: g.notes ?? null,
         assignedTableId: resolveTableId(g.tableLabel),
         isPlusOnePlaceholder: false,
+        isVip: !!g.isVip,
       },
     })));
     for (const h of hostRecords) {
@@ -80,6 +82,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           assignedTableId: resolveTableId(g.tableLabel) ?? hostTable,
           plusOneOfGuestId: hostId,
           isPlusOnePlaceholder: !!g.isPlaceholder,
+          isVip: !!g.isVip,
         },
       });
     }));

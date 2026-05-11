@@ -103,6 +103,7 @@ export default async function EventPage({
           groupTag: g.groupTag,
           plusOneOfGuestId: g.plusOneOfGuestId,
           isPlusOnePlaceholder: g.isPlusOnePlaceholder,
+          isVip: g.isVip,
           notes: g.notes,
         }))}
         qrCodes={event.qrCodes.map(q => ({

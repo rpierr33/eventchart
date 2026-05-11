@@ -16,7 +16,7 @@ const SYSTEM = `You normalize messy event guest-list documents into clean JSON.
 The input may be a text dump (CSV, pasted email, Word doc) or a photo of a printed/handwritten list.
 
 Output STRICT JSON only:
-{"guests": [{firstName, lastName, tableLabel?, groupTag?, notes?, plusOneOf?, isPlaceholder?}]}
+{"guests": [{firstName, lastName, tableLabel?, groupTag?, notes?, plusOneOf?, isPlaceholder?, isVip?}]}
 
 Rules:
 - Names: split into firstName + lastName. If lastName unknown, leave empty.
@@ -26,7 +26,13 @@ Rules:
 - "Table 7: John, Mary, Sue" → 3 records, all with tableLabel:"Table 7".
 - "T7: John" → tableLabel: "T7" (preserve exact label as written in the source).
 - Section headers like "Bride's Family:" → groupTag on guests below until next header.
-- Dietary/accessibility/VIP notes → notes field.
+- Dietary/accessibility notes → notes field.
+- VIP detection: set isVip:true when the source contains any of these signals:
+  * Explicit prefix/suffix: "VIP", "★", "*", "Honored Guest", "Guest of Honor".
+  * Titled standouts: Senator, Congressman, Congresswoman, Mayor, Governor, Judge, Reverend, Father, Rabbi, Imam, General, Admiral, Captain (military), Dr. when paired with a notable surname or context, CEO/Founder/Chair when listed in a business event header, Ambassador, Honorable, Justice, Sir, Dame, Lord, Lady, His/Her Excellency.
+  * Section headers like "VIP Table", "Head Table", "Sweetheart Table" → mark every guest under that header isVip:true.
+  * If the title is just "Mr." or "Mrs." alone (no further distinction), do NOT mark VIP.
+  Always preserve any explicit title in the firstName (e.g., "Senator Pierre" → firstName:"Senator Pierre" or firstName:"Senator", lastName:"Pierre" — your call by context, but keep the title visible).
 - Drop empty rows, "X people" counts, and any non-guest noise.
 - Maximum 2000 guests.
 - Do NOT invent guests. Only output what's present.
@@ -76,6 +82,7 @@ export async function POST(req: Request) {
       notes: g.notes ? String(g.notes).trim() : null,
       plusOneOf: g.plusOneOf ? String(g.plusOneOf).trim() : null,
       isPlaceholder: !!g.isPlaceholder,
+      isVip: !!g.isVip,
     })).filter((g) => g.firstName || g.lastName);
 
     return NextResponse.json({ guests: cleaned });

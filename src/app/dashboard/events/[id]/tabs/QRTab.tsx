@@ -124,7 +124,10 @@ export default function QRTab(props: {
               One QR per landmark + one per table, auto-generated from your floor plan. Delete the ones you don&apos;t need. Print and post.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {qrCodes.length > 0 && (
+              <PrintAllMenu eventId={eventId} />
+            )}
             <button onClick={regenerateAll} disabled={regenBusy || creating} className="btn h-10 text-[13px]">
               {regenBusy ? "Syncing…" : "Sync from floor plan"}
             </button>
@@ -195,6 +198,53 @@ export default function QRTab(props: {
           onPick={createForAnchor}
           busy={creating}
         />
+      )}
+    </div>
+  );
+}
+
+// Print-all dropdown: planner picks a size (large/medium/small/tile) and a
+// multi-page PDF opens in a new tab. Each page is titled with the QR's label
+// ("Table 1", "Main Entrance"…) so there's never confusion later.
+function PrintAllMenu({ eventId }: { eventId: string }) {
+  const [open, setOpen] = useState(false);
+  const sizes: Array<{ key: "large" | "medium" | "small" | "tile"; label: string; sub: string }> = [
+    { key: "large",  label: "Large",   sub: "6\" — full-page sign" },
+    { key: "medium", label: "Medium",  sub: "4\" — standing card" },
+    { key: "small",  label: "Small",   sub: "2\" — table tent" },
+    { key: "tile",   label: "Tile",    sub: "0.75\" — 12 per page (stickers)" },
+  ];
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)} className="btn h-10 text-[13px]">
+        🖨 Print all
+      </button>
+      {open && (
+        <>
+          <button
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40"
+            tabIndex={-1}
+            aria-label="Close"
+            style={{ background: "transparent" }}
+          />
+          <div className="absolute right-0 mt-1 w-64 card p-1 z-50 shadow-lg">
+            <div className="px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-[var(--color-fg-muted)]">QR size</div>
+            {sizes.map(s => (
+              <a
+                key={s.key}
+                href={`/api/events/${eventId}/qr/print-all?size=${s.key}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setOpen(false)}
+                className="block px-3 py-2 hover:bg-[var(--color-surface-2)] rounded-md"
+              >
+                <div className="text-[14px] font-medium">{s.label}</div>
+                <div className="text-[12px] text-[var(--color-fg-muted)]">{s.sub}</div>
+              </a>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

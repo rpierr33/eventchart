@@ -14,6 +14,7 @@ export type GuestForTabs = {
   plusOneOfGuestId: string | null;
   isPlusOnePlaceholder: boolean;
   notes: string | null;
+  isVip?: boolean;
 };
 
 export default function GuestsTab(props: {
@@ -200,14 +201,15 @@ export default function GuestsTab(props: {
               {filtered.map(g => (
                 <tr key={g.id} className="border-t border-[var(--color-border-soft)] hover:bg-[var(--color-bg-elev-2)]">
                   <td className="px-4 py-3">
-                    <div className="font-medium">{g.firstName} {g.lastName}</div>
+                    <div className="font-medium flex items-center gap-2 flex-wrap">
+                      <span>{g.firstName} {g.lastName}</span>
+                      {g.isVip && <span className="badge badge-accent text-[10px]">VIP</span>}
+                      {g.isPlusOnePlaceholder && <span className="badge badge-yellow text-[10px]">TBD</span>}
+                    </div>
                     {g.plusOneOfGuestId && (
                       <div className="text-xs text-[var(--color-fg-muted)]">
                         +1 of {guests.find(h => h.id === g.plusOneOfGuestId)?.firstName ?? "host"}
                       </div>
-                    )}
-                    {g.isPlusOnePlaceholder && (
-                      <span className="badge badge-yellow ml-1">TBD</span>
                     )}
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
@@ -569,9 +571,9 @@ function AIImportModal({ eventId, onClose, onSaved }: { eventId: string; onClose
 // Generic review-before-commit modal used for FILE-uploaded AI parses (CSV/PDF/image/text).
 // Spec: "Never auto-save AI-parsed guest data without human review."
 function AIReviewModal({ rows, onCancel, onCommit }: {
-  rows: Array<{ firstName: string; lastName: string; tableLabel?: string | null; groupTag?: string | null; notes?: string | null; plusOneOf?: string | null; isPlaceholder?: boolean }>;
+  rows: Array<{ firstName: string; lastName: string; tableLabel?: string | null; groupTag?: string | null; notes?: string | null; plusOneOf?: string | null; isPlaceholder?: boolean; isVip?: boolean }>;
   onCancel: () => void;
-  onCommit: (rows: Array<{ firstName: string; lastName: string; tableLabel?: string | null; groupTag?: string | null; notes?: string | null; plusOneOf?: string | null; isPlaceholder?: boolean }>) => Promise<void>;
+  onCommit: (rows: Array<{ firstName: string; lastName: string; tableLabel?: string | null; groupTag?: string | null; notes?: string | null; plusOneOf?: string | null; isPlaceholder?: boolean; isVip?: boolean }>) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(rows);
   const [busy, setBusy] = useState(false);
@@ -596,17 +598,21 @@ function AIReviewModal({ rows, onCancel, onCommit }: {
               <th className="text-left px-3 py-2">Last</th>
               <th className="text-left px-3 py-2">Table</th>
               <th className="text-left px-3 py-2">Group</th>
+              <th className="text-center px-3 py-2 w-14" title="AI-detected VIP">VIP</th>
               <th className="text-left px-3 py-2">Notes</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
             {draft.map((g, i) => (
-              <tr key={i} className="border-t border-[var(--color-border-soft)]">
+              <tr key={i} className={`border-t border-[var(--color-border-soft)] ${g.isVip ? "bg-[var(--color-accent-soft)]/30" : ""}`}>
                 <td className="px-3 py-1"><input className="input h-9" value={g.firstName} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, firstName: e.target.value } : r))} /></td>
                 <td className="px-3 py-1"><input className="input h-9" value={g.lastName} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, lastName: e.target.value } : r))} /></td>
                 <td className="px-3 py-1"><input className="input h-9 w-20" value={g.tableLabel ?? ""} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, tableLabel: e.target.value || null } : r))} placeholder="T7" /></td>
                 <td className="px-3 py-1"><input className="input h-9" value={g.groupTag ?? ""} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, groupTag: e.target.value || null } : r))} /></td>
+                <td className="px-3 py-1 text-center">
+                  <input type="checkbox" checked={!!g.isVip} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, isVip: e.target.checked } : r))} title="VIP" />
+                </td>
                 <td className="px-3 py-1"><input className="input h-9" value={g.notes ?? ""} onChange={e => setDraft(prev => prev.map((r, j) => j === i ? { ...r, notes: e.target.value || null } : r))} /></td>
                 <td className="px-3 py-1 text-right"><button onClick={() => setDraft(prev => prev.filter((_, j) => j !== i))} className="btn btn-danger h-8 px-2 text-xs">Remove</button></td>
               </tr>

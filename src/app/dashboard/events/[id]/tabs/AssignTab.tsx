@@ -217,7 +217,10 @@ export default function AssignTab(props: {
                     : "border-transparent hover:bg-[var(--color-bg-elev-2)]"
                 }`}
               >
-                <div className="font-medium">{g.firstName} {g.lastName}</div>
+                <div className="font-medium flex items-center gap-1.5 flex-wrap">
+                  <span>{g.firstName} {g.lastName}</span>
+                  {g.isVip && <span className="badge badge-accent text-[10px] px-1.5 py-0">VIP</span>}
+                </div>
                 {g.groupTag && <div className="text-xs text-[var(--color-fg-muted)]">{g.groupTag}</div>}
               </button>
             </li>
@@ -262,8 +265,11 @@ export default function AssignTab(props: {
                 </div>
                 <ul className="space-y-1">
                   {seated.map((g, idx) => (
-                    <li key={g.id} className="text-sm flex items-center justify-between rounded px-2 py-1 hover:bg-[var(--color-surface-2)]">
-                      <span className="flex-1 truncate">{g.firstName} {g.lastName}</span>
+                    <li key={g.id} className={`text-sm flex items-center justify-between rounded px-2 py-1 ${g.isVip ? "bg-[var(--color-accent-soft)]/40 hover:bg-[var(--color-accent-soft)]" : "hover:bg-[var(--color-surface-2)]"}`}>
+                      <span className="flex-1 truncate flex items-center gap-1.5">
+                        {g.firstName} {g.lastName}
+                        {g.isVip && <span className="badge badge-accent text-[10px] px-1.5 py-0">VIP</span>}
+                      </span>
                       <div className="flex items-center gap-1">
                         <SeatPicker
                           eventId={eventId}

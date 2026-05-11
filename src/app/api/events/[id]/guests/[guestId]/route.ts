@@ -11,6 +11,7 @@ const patchSchema = z.object({
   plusOneOfGuestId: z.string().nullable().optional(),
   isPlusOnePlaceholder: z.boolean().optional(),
   assignedTableId: z.string().nullable().optional(),
+  isVip: z.boolean().optional(),
 });
 
 async function authorize(eventId: string, guestId: string, userId: string) {

@@ -10,6 +10,7 @@ const createSchema = z.object({
   notes: z.string().max(400).nullable().optional(),
   plusOneOfGuestId: z.string().nullable().optional(),
   isPlusOnePlaceholder: z.boolean().optional(),
+  isVip: z.boolean().optional(),
 });
 
 async function getOwnedEvent(eventId: string, userId: string) {
@@ -49,6 +50,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       notes: parsed.data.notes ?? null,
       plusOneOfGuestId: parsed.data.plusOneOfGuestId ?? null,
       isPlusOnePlaceholder: parsed.data.isPlusOnePlaceholder ?? false,
+      isVip: parsed.data.isVip ?? false,
     },
   });
   return NextResponse.json({ guest });

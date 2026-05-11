@@ -245,6 +245,9 @@ model Guest {
   isPlusOnePlaceholder Boolean @default(false)
 
   notes               String?
+  // True when guest list parsing detected a VIP signal (title like Senator/Mayor/Reverend,
+  // "VIP:" prefix in source row, etc.). Identification only — placement stays planner-controlled.
+  isVip               Boolean  @default(false)
 
   checkedInAt         DateTime?
   isWalkIn            Boolean  @default(false)
