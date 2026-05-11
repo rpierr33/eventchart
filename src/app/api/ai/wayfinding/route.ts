@@ -136,21 +136,27 @@ export async function POST(req: Request) {
     results.push({ fromQrId: origin.id, directions, source });
   }
 
-  // Persist
-  const rows = results.flatMap(r => r.directions.map(d => ({
-    id: r.fromQrId === null ? `null_${d.tableId}` : `${r.fromQrId}_${d.tableId}`,
-    tableId: d.tableId,
-    fromQrId: r.fromQrId,
-    directionsText: d.directionsText,
-  })));
+  // Persist — delete-then-create per origin so partial unique index (tableId where fromQrId IS NULL)
+  // can't collide. Each origin is independent so transactions are scoped per origin.
+  let persistedCount = 0;
+  for (const r of results) {
+    const tableIds = r.directions.map(d => d.tableId);
+    await db.$transaction(async (tx) => {
+      await tx.tableDirection.deleteMany({
+        where: { fromQrId: r.fromQrId, tableId: { in: tableIds } },
+      });
+      await tx.tableDirection.createMany({
+        data: r.directions.map(d => ({
+          tableId: d.tableId,
+          fromQrId: r.fromQrId,
+          directionsText: d.directionsText,
+        })),
+      });
+    });
+    persistedCount += r.directions.length;
+  }
 
-  await db.$transaction(rows.map(row => db.tableDirection.upsert({
-    where: { id: row.id },
-    update: { directionsText: row.directionsText },
-    create: row,
-  })));
-
-  return NextResponse.json({ results, persistedCount: rows.length });
+  return NextResponse.json({ results, persistedCount });
 }
 
 function heuristicSentence(ox: number, oy: number, tx: number, ty: number, label: string, originLabel: string): string {

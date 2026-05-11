@@ -59,20 +59,14 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     if (d.fromQrId !== null && !qrIds.has(d.fromQrId)) return NextResponse.json({ error: `Unknown QR ${d.fromQrId}` }, { status: 400 });
   }
 
-  await db.$transaction(parsed.data.directions.map(d => {
-    // Manual upsert since (tableId, fromQrId) with NULL fromQrId isn't a single unique key in Prisma's eyes
-    return d.fromQrId === null
-      ? db.tableDirection.upsert({
-          where: { id: `null_${d.tableId}` }, // synthetic; we use raw query path below
-          update: { directionsText: d.directionsText },
-          create: { id: `null_${d.tableId}`, tableId: d.tableId, fromQrId: null, directionsText: d.directionsText },
-        })
-      : db.tableDirection.upsert({
-          where: { id: `${d.fromQrId}_${d.tableId}` },
-          update: { directionsText: d.directionsText },
-          create: { id: `${d.fromQrId}_${d.tableId}`, tableId: d.tableId, fromQrId: d.fromQrId, directionsText: d.directionsText },
-        });
-  }));
+  await db.$transaction(async (tx) => {
+    for (const d of parsed.data.directions) {
+      await tx.tableDirection.deleteMany({ where: { tableId: d.tableId, fromQrId: d.fromQrId } });
+      await tx.tableDirection.create({
+        data: { tableId: d.tableId, fromQrId: d.fromQrId, directionsText: d.directionsText },
+      });
+    }
+  });
 
   return NextResponse.json({ ok: true, count: parsed.data.directions.length });
 }
