@@ -21,6 +21,7 @@ export type LayoutForTabs = {
   sourceImageWidth: number;
   sourceImageHeight: number;
   tables: TableForTabs[];
+  landmarks?: Array<{ id: string; label: string; xPct: number; yPct: number }>;
 };
 
 export type TemplateOption = {
@@ -109,7 +110,23 @@ export default function LayoutTab(props: {
       });
       if (!persistRes.ok) throw new Error("Could not save detected tables");
       const pd = await persistRes.json();
-      toast.success(`AI detected ${pd.tables.length} tables. Review below.`);
+
+      // 5. Persist detected landmarks (entrance, bar, stage, ...) for the QR creator picker
+      const aiLandmarks = Array.isArray(aiData.landmarks) ? aiData.landmarks : [];
+      if (aiLandmarks.length > 0) {
+        await fetch(`/api/events/${eventId}/landmarks`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            landmarks: aiLandmarks.map((l: { label?: string; xPct?: number; yPct?: number }) => ({
+              label: l.label || "Landmark",
+              xPct: l.xPct ?? 50,
+              yPct: l.yPct ?? 50,
+            })),
+          }),
+        }).catch(() => {});
+      }
+      toast.success(`AI detected ${pd.tables.length} tables${aiLandmarks.length ? ` and ${aiLandmarks.length} landmarks` : ""}. Review below.`);
       onChange({ ...createData.layout, tables: pd.tables });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");

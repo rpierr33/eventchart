@@ -22,7 +22,12 @@ export default async function EventPage({
   const event = await db.event.findUnique({
     where: { id },
     include: {
-      layout: { include: { tables: { orderBy: { label: "asc" } } } },
+      layout: {
+        include: {
+          tables: { orderBy: { label: "asc" } },
+          landmarks: { orderBy: { label: "asc" } },
+        },
+      },
       guests: { orderBy: [{ lastName: "asc" }, { firstName: "asc" }], include: { assignedSeat: true } },
       qrCodes: { orderBy: { createdAt: "asc" } },
     },
@@ -82,6 +87,12 @@ export default async function EventPage({
             yPct: t.yPct,
             directionsText: t.directionsText,
             notes: t.notes,
+          })),
+          landmarks: event.layout.landmarks.map(l => ({
+            id: l.id,
+            label: l.label,
+            xPct: l.xPct,
+            yPct: l.yPct,
           })),
         } : null}
         guests={event.guests.map(g => ({

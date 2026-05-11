@@ -125,11 +125,26 @@ model Layout {
 
   event              Event?   @relation("EventLayout")
   tables             Table[]
+  landmarks          Landmark[]
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([templateOwnerId])
+}
+
+model Landmark {
+  id        String   @id @default(cuid())
+  layoutId  String
+  layout    Layout   @relation(fields: [layoutId], references: [id], onDelete: Cascade)
+
+  label     String
+  xPct      Float
+  yPct      Float
+
+  createdAt DateTime @default(now())
+
+  @@index([layoutId])
 }
 
 model Table {
