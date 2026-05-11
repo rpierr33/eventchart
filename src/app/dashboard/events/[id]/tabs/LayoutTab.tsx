@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { arrayBufferToBase64 } from "@/lib/utils";
+import SectionPolygonEditor from "@/components/SectionPolygonEditor";
 
 // Pick-mode section assignment for a single table row in the review table.
 // Dropdown of existing sections + "+ New section…" inline create.
@@ -78,6 +79,7 @@ export type SectionForTabs = {
   xPct: number;
   yPct: number;
   color?: string | null;
+  polygon?: Array<{ x: number; y: number }> | null;
 };
 
 export type LayoutForTabs = {
@@ -459,6 +461,7 @@ function ReviewTable({
 }) {
   const [tables, setTables] = useState<TableForTabs[]>(layout.tables);
   const [saving, setSaving] = useState(false);
+  const [showPolygonEditor, setShowPolygonEditor] = useState(false);
   const dirty = JSON.stringify(tables) !== JSON.stringify(layout.tables);
 
   function updateTable(idx: number, patch: Partial<TableForTabs>) {
@@ -548,6 +551,7 @@ function ReviewTable({
           AI found <strong className="text-[var(--color-fg)]">{layout.tables.length}</strong> tables on your plan. Edit anything below — capacity, label, or directions text. Hit Save when done.
         </div>
         <button onClick={generateDirections} disabled={dirty || tables.length === 0} className="btn h-9 px-3 text-sm">✨ Write directions</button>
+        <button onClick={() => setShowPolygonEditor(true)} disabled={dirty || tables.length === 0} className="btn h-9 px-3 text-sm" title="Draw section regions on the floor plan — tables inside auto-assign.">◇ Draw sections</button>
         <button onClick={saveAsTemplate} disabled={dirty} className="btn h-9 px-3 text-sm">Save as template</button>
         <button onClick={onReplace} className="btn btn-danger h-9 px-3 text-sm">Replace plan</button>
         <button onClick={saveAll} disabled={!dirty || saving} className="btn btn-primary h-9 px-3 text-sm">
@@ -624,6 +628,59 @@ function ReviewTable({
           </div>
         </div>
       </div>
+
+      {showPolygonEditor && (
+        <SectionPolygonEditor
+          eventId={eventId}
+          layoutId={layout.id}
+          layoutImageUrl={layout.sourceImageUrl}
+          layoutWidth={layout.sourceImageWidth}
+          layoutHeight={layout.sourceImageHeight}
+          existingSections={(layout.sections ?? []).map(s => ({
+            id: s.id,
+            label: s.label,
+            xPct: s.xPct,
+            yPct: s.yPct,
+            color: s.color,
+            polygon: s.polygon,
+          }))}
+          tables={tables.filter(t => t.id).map(t => ({
+            id: t.id!,
+            label: t.label,
+            xPct: t.xPct,
+            yPct: t.yPct,
+          }))}
+          onClose={() => setShowPolygonEditor(false)}
+          onSaved={async () => {
+            setShowPolygonEditor(false);
+            // Refetch sections + tables so the picker dropdowns and assignments update.
+            try {
+              const [secRes, tblRes] = await Promise.all([
+                fetch(`/api/events/${eventId}/sections`),
+                fetch(`/api/events/${eventId}/tables`),
+              ]);
+              if (secRes.ok && tblRes.ok) {
+                const secData = await secRes.json();
+                const tblData = await tblRes.json();
+                const newSections: SectionForTabs[] = secData.sections.map(
+                  (s: { id: string; label: string; xPct: number; yPct: number; color: string | null; polygon: unknown }) => ({
+                    id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, color: s.color,
+                    polygon: Array.isArray(s.polygon) ? (s.polygon as Array<{x: number; y: number}>) : null,
+                  }),
+                );
+                const newTables: TableForTabs[] = tblData.tables.map(
+                  (t: { id: string; label: string; capacity: number; xPct: number; yPct: number; directionsText: string | null; notes: string | null; sectionId: string | null }) => ({
+                    id: t.id, label: t.label, capacity: t.capacity, xPct: t.xPct, yPct: t.yPct,
+                    directionsText: t.directionsText, notes: t.notes, sectionId: t.sectionId,
+                  }),
+                );
+                setTables(newTables);
+                onChange({ ...layout, sections: newSections, tables: newTables });
+              }
+            } catch { /* refetch errors are non-fatal */ }
+          }}
+        />
+      )}
     </div>
   );
 }

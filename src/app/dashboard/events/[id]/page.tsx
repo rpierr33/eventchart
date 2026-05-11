@@ -102,6 +102,9 @@ export default async function EventPage({
             xPct: s.xPct,
             yPct: s.yPct,
             color: s.color,
+            polygon: Array.isArray(s.polygon)
+              ? (s.polygon as Array<{ x: number; y: number }>)
+              : null,
           })),
         } : null}
         guests={event.guests.map(g => ({

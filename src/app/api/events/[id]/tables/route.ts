@@ -24,6 +24,16 @@ async function getOwnedEventWithLayout(eventId: string, userId: string) {
   return ev;
 }
 
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id: eventId } = await ctx.params;
+  let userId: string;
+  try { userId = await requireUserId(); } catch { return NextResponse.json({ error: "Not signed in" }, { status: 401 }); }
+  const ev = await getOwnedEventWithLayout(eventId, userId);
+  if (!ev || !ev.layout) return NextResponse.json({ tables: [] });
+  const tables = await db.table.findMany({ where: { layoutId: ev.layout.id }, orderBy: { label: "asc" } });
+  return NextResponse.json({ tables });
+}
+
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: eventId } = await ctx.params;
   let userId: string;
