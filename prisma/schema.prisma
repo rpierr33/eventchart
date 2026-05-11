@@ -99,6 +99,10 @@ model Event {
 
   noShowAutoFlagMinutes Int @default(45)
 
+  // Lowercased landmark labels the planner explicitly removed from this event's QR set.
+  // Used by /api/events/[id]/qr/bulk-auto to skip re-creating those landmarks on sync.
+  omittedLandmarkLabels String[] @default([])
+
   layoutId      String?     @unique
   layout        Layout?     @relation("EventLayout", fields: [layoutId], references: [id])
 

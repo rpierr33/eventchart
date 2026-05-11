@@ -20,9 +20,10 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
   const existingLabels = new Set(ev.qrCodes.filter(q => !q.tableId).map(q => q.label.toLowerCase()));
   const existingTableIds = new Set(ev.qrCodes.filter(q => q.tableId).map(q => q.tableId!));
+  const omitted = new Set((ev.omittedLandmarkLabels ?? []).map(s => s.toLowerCase()));
 
   const newLandmarkQrs = ev.layout.landmarks
-    .filter(l => !existingLabels.has(l.label.toLowerCase()))
+    .filter(l => !existingLabels.has(l.label.toLowerCase()) && !omitted.has(l.label.toLowerCase()))
     .map(l => ({
       eventId: id,
       label: l.label,

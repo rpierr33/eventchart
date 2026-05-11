@@ -85,12 +85,16 @@ export default function QRTab(props: {
   }
 
   async function deleteQr(id: string) {
-    if (!confirm("Delete this QR?")) return;
+    const qr = qrCodes.find(q => q.id === id);
+    const msg = qr && !qr.tableId
+      ? `Remove the "${qr.label}" QR? Sync from floor plan won't recreate it.`
+      : "Remove this QR?";
+    if (!confirm(msg)) return;
     const res = await fetch(`/api/events/${eventId}/qr/${id}`, { method: "DELETE" });
     if (res.ok) {
       onChange(qrCodes.filter(q => q.id !== id));
-      toast.success("Deleted.");
-    } else toast.error("Could not delete");
+      toast.success(qr && !qr.tableId ? `Removed. "${qr.label}" stays out of future syncs.` : "Removed.");
+    } else toast.error("Could not remove");
   }
 
   if (!layout) {
@@ -151,7 +155,7 @@ export default function QRTab(props: {
                           : "Landmark"}
                       </p>
                     </div>
-                    <button onClick={() => deleteQr(q.id)} className="btn btn-ghost h-8 w-8 p-0 text-[13px]">✕</button>
+                    <button onClick={() => deleteQr(q.id)} title="Remove this QR" className="btn btn-danger h-8 px-2 text-[12px]">Remove</button>
                   </div>
                   <div className="bg-white rounded-lg p-3 flex items-center justify-center aspect-square border border-[var(--color-border-soft)]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}

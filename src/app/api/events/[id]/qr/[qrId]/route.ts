@@ -48,6 +48,19 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string;
   try { userId = await requireUserId(); } catch { return NextResponse.json({ error: "Not signed in" }, { status: 401 }); }
   const qr = await authorize(id, qrId, userId);
   if (!qr) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  await db.qRCode.delete({ where: { id: qrId } });
+
+  await db.$transaction(async (tx) => {
+    await tx.qRCode.delete({ where: { id: qrId } });
+    // If this was a landmark QR (not a table tent), remember the planner removed it so Sync won't recreate it.
+    if (!qr.tableId) {
+      const lower = qr.label.toLowerCase();
+      await tx.event.update({
+        where: { id },
+        data: {
+          omittedLandmarkLabels: { push: lower },
+        },
+      });
+    }
+  });
   return NextResponse.json({ ok: true });
 }
