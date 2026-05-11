@@ -64,12 +64,34 @@ export default function GuestsTab(props: {
       let parseBody: object;
       const isImage = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"].includes(file.type);
       const isPdf = file.type === "application/pdf";
-      const isText = !isImage && !isPdf;
+      const lowerName = file.name.toLowerCase();
+      const isXlsx = file.type.includes("spreadsheet") || lowerName.endsWith(".xlsx") || lowerName.endsWith(".xls");
+      const isDocx = file.type.includes("wordprocessing") || lowerName.endsWith(".docx");
 
       if (isImage) {
         const mediaType = file.type === "image/jpg" ? "image/jpeg" : file.type;
         const b64 = arrayBufferToBase64(await file.arrayBuffer());
         parseBody = { imageBase64: b64, mediaType };
+      } else if (isXlsx) {
+        // XLSX → text via the xlsx library, then send to text-AI
+        const XLSX = await import("xlsx");
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: "array" });
+        const lines: string[] = [];
+        for (const sheetName of wb.SheetNames) {
+          const sheet = wb.Sheets[sheetName];
+          const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false, defval: "" });
+          lines.push(`# Sheet: ${sheetName}`);
+          for (const row of rows) {
+            lines.push(row.map(v => String(v ?? "").trim()).join(" \t "));
+          }
+        }
+        parseBody = { text: lines.join("\n") };
+      } else if (isDocx) {
+        const mammoth = (await import("mammoth")).default;
+        const buf = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer: buf });
+        parseBody = { text: result.value };
       } else if (isPdf) {
         const pdfjs = await import("pdfjs-dist");
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -83,7 +105,6 @@ export default function GuestsTab(props: {
           allText += pageText + "\n";
         }
         if (allText.trim().length < 20) {
-          // Likely scanned PDF — render first page as image and use vision
           const page = await pdf.getPage(1);
           const viewport = page.getViewport({ scale: 2 });
           const canvas = document.createElement("canvas");
@@ -99,12 +120,11 @@ export default function GuestsTab(props: {
         } else {
           parseBody = { text: allText };
         }
-      } else if (isText) {
-        const text = await file.text();
-        parseBody = { text };
       } else {
-        toast.error("Unsupported file type");
-        return;
+        // Last-resort plain text
+        const text = await file.text();
+        if (!text.trim()) { toast.error("Unsupported file type"); return; }
+        parseBody = { text };
       }
 
       const res = await fetch("/api/ai/parse-guests", {
@@ -146,7 +166,7 @@ export default function GuestsTab(props: {
         <div className="flex-1" />
         <input
           type="file"
-          accept="image/*,application/pdf,.csv,.txt,.tsv"
+          accept="image/*,application/pdf,.csv,.txt,.tsv,.xlsx,.xls,.docx"
           ref={fileRef}
           onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }}
           className="hidden"

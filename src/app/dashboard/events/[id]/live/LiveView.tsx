@@ -475,22 +475,31 @@ function WalkInApprovalModal({ walkIn, eventId, tables, guests, onClose, onDone 
   onClose: () => void; onDone: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [isVip, setIsVip] = useState<boolean>(Boolean((walkIn as WalkInT & { isVip?: boolean }).isVip));
   const [recommendation, setRecommendation] = useState<{ tableId: string | null; reason: string; source: string } | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const res = await fetch(`/api/ai/smart-walkin`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ eventId, walkInId: walkIn.id }),
-      });
-      if (!res.ok || cancelled) return;
-      const data = await res.json();
-      if (!cancelled) setRecommendation(data);
-    })();
-    return () => { cancelled = true; };
+  const fetchRecommendation = useCallback(async (vip: boolean) => {
+    const res = await fetch(`/api/ai/smart-walkin`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ eventId, walkInId: walkIn.id, vipOverride: vip }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setRecommendation(data);
   }, [eventId, walkIn.id]);
+
+  useEffect(() => { fetchRecommendation(isVip); }, [fetchRecommendation, isVip]);
+
+  async function toggleVip(next: boolean) {
+    setIsVip(next);
+    // Persist so smart-walkin uses the flag for any future calls
+    await fetch(`/api/events/${eventId}/walkin/${walkIn.id}/vip`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ isVip: next }),
+    }).catch(() => {});
+  }
 
   async function approve(tableId: string | null) {
     setBusy(true);
@@ -501,7 +510,7 @@ function WalkInApprovalModal({ walkIn, eventId, tables, guests, onClose, onDone 
     });
     setBusy(false);
     if (!res.ok) { toast.error("Approve failed"); return; }
-    toast.success(`Seated ${walkIn.firstName} ${walkIn.lastName}`);
+    toast.success(`Seated ${walkIn.firstName} ${walkIn.lastName}${isVip ? " (VIP)" : ""}`);
     onDone();
   }
   async function decline() {
@@ -515,8 +524,12 @@ function WalkInApprovalModal({ walkIn, eventId, tables, guests, onClose, onDone 
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="card w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-semibold">Walk-in</h3>
-        <p className="text-sm text-[var(--color-fg-muted)] mb-1">{walkIn.firstName} {walkIn.lastName}</p>
-        <p className="text-xs text-[var(--color-fg-faint)] mb-4">Arrived {fmtDateTime(walkIn.createdAt)}</p>
+        <p className="text-sm text-[var(--color-fg-muted)] mb-1">{walkIn.firstName} {walkIn.lastName}{isVip && <span className="ml-2 badge badge-accent">VIP</span>}</p>
+        <p className="text-xs text-[var(--color-fg-faint)] mb-3">Arrived {fmtDateTime(walkIn.createdAt)}</p>
+        <label className="flex items-center gap-2 mb-3 p-2 rounded-md cursor-pointer hover:bg-[var(--color-surface-2)] text-[13px]">
+          <input type="checkbox" checked={isVip} onChange={(e) => toggleVip(e.target.checked)} />
+          <span>Treat as <strong>VIP</strong> — prefer a better table</span>
+        </label>
         {recommendation?.tableId && (
           <div className="mb-3 p-3 rounded-lg bg-[var(--color-brand)]/10 border border-[var(--color-brand)]/30">
             <div className="text-xs text-[var(--color-fg-muted)] mb-1">

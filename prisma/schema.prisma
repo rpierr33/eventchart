@@ -289,6 +289,7 @@ model WalkInRequest {
   status      String   @default("PENDING")
   guestId     String?
   notes       String?
+  isVip       Boolean  @default(false)
   createdAt   DateTime @default(now())
   resolvedAt  DateTime?
 

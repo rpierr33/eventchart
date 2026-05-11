@@ -7,6 +7,8 @@ import { getAnthropic, MODEL } from "@/lib/anthropic";
 const schema = z.object({
   eventId: z.string(),
   walkInId: z.string(),
+  // Optional override — host hasn't persisted yet but wants to preview a VIP recommendation.
+  vipOverride: z.boolean().optional(),
 });
 
 const SYSTEM = `You recommend the best table for an incoming walk-in guest.
@@ -43,30 +45,55 @@ export async function POST(req: Request) {
   const walkIn = await db.walkInRequest.findUnique({ where: { id: parsed.data.walkInId } });
   if (!walkIn || walkIn.eventId !== event.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Heuristic: same last name on a table > matching groupTag > most open seats > first open
+  // VIP override from the modal takes precedence over persisted isVip.
+  const isVip = parsed.data.vipOverride ?? walkIn.isVip;
+
+  // Heuristic: VIP → prefer the lowest-numbered open table (closest to head/front).
+  // Otherwise: same last name on a table > most open seats > first open
   type GuestRow = { id: string; lastName: string; firstName: string; groupTag: string | null; notes: string | null };
   type TableRow = { id: string; label: string; capacity: number; notes: string | null; guests: GuestRow[] };
   const tables = event.layout.tables as TableRow[];
-  const sameSurname = tables.find((t: TableRow) =>
-    t.guests.some((g: GuestRow) => g.lastName.toLowerCase() === walkIn.lastName.toLowerCase() && walkIn.lastName.length > 0)
-    && t.guests.length < t.capacity
-  );
-  const heuristicChoice = sameSurname?.id ??
-    tables
-      .filter((t: TableRow) => t.guests.length < t.capacity)
-      .sort((a: TableRow, b: TableRow) => (b.capacity - b.guests.length) - (a.capacity - a.guests.length))[0]?.id ?? null;
+
+  function tableNumeric(label: string): number {
+    const m = label.match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : 999;
+  }
+
+  let heuristicChoice: string | null = null;
+  let heuristicReason = "Most open seats";
+  if (isVip) {
+    const vipPick = tables
+      .filter(t => t.guests.length < t.capacity)
+      .sort((a, b) => tableNumeric(a.label) - tableNumeric(b.label))[0];
+    if (vipPick) {
+      heuristicChoice = vipPick.id;
+      heuristicReason = `VIP — seated at ${vipPick.label} (front of room)`;
+    }
+  }
+  let sameSurname: TableRow | undefined;
+  if (!heuristicChoice) {
+    sameSurname = tables.find((t: TableRow) =>
+      t.guests.some((g: GuestRow) => g.lastName.toLowerCase() === walkIn.lastName.toLowerCase() && walkIn.lastName.length > 0)
+      && t.guests.length < t.capacity
+    );
+    heuristicChoice = sameSurname?.id ??
+      tables
+        .filter((t: TableRow) => t.guests.length < t.capacity)
+        .sort((a: TableRow, b: TableRow) => (b.capacity - b.guests.length) - (a.capacity - a.guests.length))[0]?.id ?? null;
+    if (sameSurname) heuristicReason = `Matches surname "${walkIn.lastName}" already at this table`;
+  }
 
   const anthropic = getAnthropic();
   if (!anthropic || !heuristicChoice) {
     return NextResponse.json({
       tableId: heuristicChoice,
-      reason: sameSurname ? `Matches surname "${walkIn.lastName}" already at this table` : "Most open seats",
+      reason: heuristicReason,
       source: "heuristic",
     });
   }
 
   const payload = {
-    walkIn: { firstName: walkIn.firstName, lastName: walkIn.lastName, notes: walkIn.notes },
+    walkIn: { firstName: walkIn.firstName, lastName: walkIn.lastName, notes: walkIn.notes, isVip },
     tables: tables.map((t: TableRow) => ({
       id: t.id,
       label: t.label,
@@ -90,7 +117,7 @@ export async function POST(req: Request) {
     if (!json || !json.tableId) throw new Error("AI returned no tableId");
     return NextResponse.json({ tableId: json.tableId, reason: json.reason ?? "Claude pick", source: "claude" });
   } catch {
-    return NextResponse.json({ tableId: heuristicChoice, reason: sameSurname ? `Matches surname "${walkIn.lastName}"` : "Most open seats", source: "heuristic" });
+    return NextResponse.json({ tableId: heuristicChoice, reason: heuristicReason, source: "heuristic" });
   }
 }
 

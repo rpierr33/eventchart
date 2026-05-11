@@ -179,6 +179,16 @@ export default function LayoutTab(props: {
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const lower = file.name.toLowerCase();
+    const isPptx = file.type.includes("presentation") || lower.endsWith(".pptx") || lower.endsWith(".ppt");
+    if (isPptx) {
+      toast.error(
+        "PPTX rendering isn't supported on the server. Export your slide as PNG or PDF and re-upload.",
+        { duration: 8000 },
+      );
+      e.target.value = "";
+      return;
+    }
     if (file.type === "application/pdf") {
       setPendingPdf(file);
       return;
@@ -196,7 +206,7 @@ export default function LayoutTab(props: {
         </p>
         <div className="flex items-center justify-center gap-3">
           <label className="btn btn-primary cursor-pointer">
-            <input type="file" accept="image/*,application/pdf" onChange={onPickFile} className="hidden" disabled={uploading} />
+            <input type="file" accept="image/*,application/pdf,.pptx,.ppt" onChange={onPickFile} className="hidden" disabled={uploading} />
             {uploading ? "Processing…" : "Upload & auto-detect"}
           </label>
           {templates.length > 0 && (

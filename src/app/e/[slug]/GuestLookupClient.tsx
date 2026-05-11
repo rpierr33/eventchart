@@ -420,11 +420,42 @@ function DirectionsMap({
   tableLabel: string;
 }) {
   const aspect = layout.sourceImageHeight / layout.sourceImageWidth;
+  const hasOrigin = originXPct !== null && originYPct !== null;
   return (
     <div className="card overflow-hidden">
       <div className="relative bg-black select-none" style={{ paddingTop: `${aspect * 100}%` }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={layout.sourceImageUrl} alt="" className="absolute inset-0 w-full h-full object-contain" />
+        {/* Highlighted path overlay from origin to destination — spec Phase 3 wayfinding */}
+        {hasOrigin && (
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden
+          >
+            <defs>
+              <marker id="path-arrow" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L4,2 L0,4 Z" fill="var(--color-accent)" />
+              </marker>
+            </defs>
+            <line
+              x1={originXPct!}
+              y1={originYPct!}
+              x2={targetXPct}
+              y2={targetYPct}
+              stroke="var(--color-accent)"
+              strokeWidth="0.6"
+              strokeDasharray="1.4 1.2"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              opacity="0.85"
+              markerEnd="url(#path-arrow)"
+            >
+              <animate attributeName="stroke-dashoffset" from="0" to="-12" dur="1.2s" repeatCount="indefinite" />
+            </line>
+          </svg>
+        )}
         {layout.tables.map(t => (
           <div key={t.id} className="pin pin-gray opacity-60" style={{ left: `${t.xPct}%`, top: `${t.yPct}%`, pointerEvents: "none", width: 22, height: 22, fontSize: 11 }}>
             {t.label.match(/\d+/)?.[0] ?? "•"}
@@ -432,10 +463,8 @@ function DirectionsMap({
         ))}
         <div className="target-ring" style={{ left: `${targetXPct}%`, top: `${targetYPct}%` }} />
         <div className="pin pin-red" style={{ left: `${targetXPct}%`, top: `${targetYPct}%`, pointerEvents: "none" }}>{tableLabel.match(/\d+/)?.[0] ?? "•"}</div>
-        {originXPct !== null && originYPct !== null && (
-          <>
-            <div className="you-are-here" style={{ left: `${originXPct}%`, top: `${originYPct}%` }} />
-          </>
+        {hasOrigin && (
+          <div className="you-are-here" style={{ left: `${originXPct!}%`, top: `${originYPct!}%` }} />
         )}
       </div>
       <div className="p-3 text-xs text-[var(--color-fg-muted)] flex items-center justify-between">

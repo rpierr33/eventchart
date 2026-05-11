@@ -1,9 +1,65 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import type { LayoutForTabs } from "./LayoutTab";
 import type { GuestForTabs } from "./GuestsTab";
+
+// Granular per-seat picker. Loads the current seat assignment via /state
+// once on mount (cheap; small N), lets the planner pick a seat 1..capacity
+// or "no specific seat", and POSTs to /api/events/[id]/guests/[guestId]/seat.
+function SeatPicker({ eventId, tableId, capacity, guestId, currentSeatNumber: _hint }: {
+  eventId: string;
+  tableId: string;
+  capacity: number;
+  guestId: string;
+  currentSeatNumber: number;
+}) {
+  const [seatNumber, setSeatNumber] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/events/${eventId}/state`)
+      .then(r => r.ok ? r.json() : null)
+      .then(s => {
+        if (cancelled || !s?.seats) return;
+        const row = (s.seats as Array<{ tableId: string; seatNumber: number; assignedGuestId: string }>)
+          .find(x => x.assignedGuestId === guestId);
+        setSeatNumber(row?.seatNumber ?? null);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [eventId, guestId]);
+
+  async function pick(n: number | null) {
+    setSaving(true);
+    const res = await fetch(`/api/events/${eventId}/guests/${guestId}/seat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ tableId, seatNumber: n }),
+    });
+    setSaving(false);
+    if (!res.ok) { toast.error("Seat assign failed"); return; }
+    setSeatNumber(n);
+    toast.success(n === null ? "Seat cleared." : `Seated at #${n}.`);
+  }
+
+  return (
+    <select
+      value={seatNumber ?? ""}
+      onChange={(e) => { const v = e.target.value; pick(v === "" ? null : parseInt(v, 10)); }}
+      disabled={saving}
+      title="Specific seat number (optional)"
+      className="h-7 px-2 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg)] tabular-nums"
+    >
+      <option value="">—</option>
+      {Array.from({ length: capacity }, (_, i) => i + 1).map(n => (
+        <option key={n} value={n}>Seat {n}</option>
+      ))}
+    </select>
+  );
+}
 
 export default function AssignTab(props: {
   eventId: string;
@@ -205,18 +261,28 @@ export default function AssignTab(props: {
                   )}
                 </div>
                 <ul className="space-y-1">
-                  {seated.map(g => (
-                    <li key={g.id} className="text-sm flex items-center justify-between rounded px-2 py-1 hover:bg-[var(--color-bg-elev-2)]">
-                      <span>{g.firstName} {g.lastName}</span>
-                      <button
-                        onClick={() => {
-                          setSelectedGuestIds(new Set([g.id]));
-                          assignSelected(null);
-                        }}
-                        className="btn btn-ghost h-7 px-2 text-xs"
-                      >
-                        ✕
-                      </button>
+                  {seated.map((g, idx) => (
+                    <li key={g.id} className="text-sm flex items-center justify-between rounded px-2 py-1 hover:bg-[var(--color-surface-2)]">
+                      <span className="flex-1 truncate">{g.firstName} {g.lastName}</span>
+                      <div className="flex items-center gap-1">
+                        <SeatPicker
+                          eventId={eventId}
+                          tableId={table.id!}
+                          capacity={table.capacity}
+                          guestId={g.id}
+                          currentSeatNumber={idx + 1 /* visual hint only — real value loaded from server below */}
+                        />
+                        <button
+                          onClick={() => {
+                            setSelectedGuestIds(new Set([g.id]));
+                            assignSelected(null);
+                          }}
+                          className="btn btn-ghost h-7 px-2 text-xs"
+                          title="Unseat"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </li>
                   ))}
                   {draftedHere.map(g => (

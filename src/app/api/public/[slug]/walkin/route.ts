@@ -10,6 +10,7 @@ const schema = z.object({
   firstName: z.string().max(40).optional().default(""),
   lastName: z.string().max(40).optional().default(""),
   qrId: z.string().nullable().optional(),
+  isVip: z.boolean().optional(),
 });
 
 export async function POST(req: Request, ctx: { params: Promise<{ slug: string }> }) {
@@ -62,6 +63,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
       firstName: parsed.data.firstName.trim() || "Walk-in",
       lastName: parsed.data.lastName.trim() || "",
       qrId: parsed.data.qrId ?? null,
+      isVip: !!parsed.data.isVip,
       status: "PENDING",
     },
   });
