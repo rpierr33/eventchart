@@ -116,9 +116,9 @@ export default function GuestLookupClient(props: {
 
   return (
     <main className="min-h-screen flex flex-col">
-      <header className="px-5 pt-5 pb-3">
-        <h1 className="text-xl font-bold">{event.name}</h1>
-        <div className="text-xs text-[var(--color-fg-muted)]">
+      <header className="px-6 pt-6 pb-4 text-center">
+        <h1 className="display text-[28px] leading-none tracking-tight">{event.name}</h1>
+        <div className="text-[12px] text-[var(--color-fg-muted)] mt-2 tracking-wide uppercase">
           {event.venueName ?? "Welcome"}{qr ? ` · ${qr.label}` : ""}
         </div>
       </header>
@@ -129,23 +129,25 @@ export default function GuestLookupClient(props: {
         )}
 
         {stage === "lookup" && (
-          <form onSubmit={onSubmitLastName} className="flex-1 flex flex-col justify-center max-w-md w-full mx-auto py-6">
-            <label htmlFor="lastName" className="text-sm text-[var(--color-fg-muted)] mb-2">Enter your last name</label>
+          <form onSubmit={onSubmitLastName} className="flex-1 flex flex-col justify-center max-w-sm w-full mx-auto py-8">
+            <p className="display text-[24px] text-center mb-1 leading-tight">Find your seat</p>
+            <label htmlFor="lastName" className="text-[13px] text-[var(--color-fg-muted)] text-center mb-5">Type your last name</label>
             <input
               id="lastName"
               autoFocus
               autoComplete="family-name"
-              className="input text-2xl h-16 px-5 text-center"
+              className="input h-16 px-5 text-center"
+              style={{ fontSize: "24px", letterSpacing: "-0.01em" }}
               value={lastName}
               onChange={e => setLastName(e.target.value)}
               placeholder="Pierre"
               disabled={busy}
             />
-            <button type="submit" className="btn btn-primary h-14 text-lg mt-4" disabled={busy || !lastName.trim()}>
+            <button type="submit" className="btn btn-primary h-14 text-[16px] mt-4" disabled={busy || !lastName.trim()}>
               {busy ? "Looking up…" : "Find my seat"}
             </button>
             {event.allowWalkIns && (
-              <button type="button" onClick={() => setStage("walkin")} className="btn btn-ghost h-12 mt-2">
+              <button type="button" onClick={() => setStage("walkin")} className="btn btn-ghost h-12 mt-3 text-[14px]">
                 I&apos;m a walk-in
               </button>
             )}
@@ -249,20 +251,21 @@ function ResultView({
   if (result.kind === "single" || chosen) {
     const match = (chosen ?? (result.kind === "single" ? result.match : null))!;
     return (
-      <div className="flex-1 flex flex-col max-w-lg w-full mx-auto py-4 gap-4">
-        <div className="card p-5 text-center">
-          <p className="text-sm text-[var(--color-fg-muted)]">Welcome,</p>
-          <h2 className="text-3xl font-bold">{match.firstName} {match.lastName}</h2>
+      <div className="flex-1 flex flex-col max-w-md w-full mx-auto py-4 gap-4">
+        <div className="card p-6 text-center">
+          <p className="text-[12px] text-[var(--color-fg-muted)] uppercase tracking-[0.08em]">Welcome,</p>
+          <h2 className="display text-[32px] mt-1 leading-tight">{match.firstName} {match.lastName}</h2>
           {match.tableLabel ? (
             <>
-              <p className="text-sm text-[var(--color-fg-muted)] mt-4">Your table</p>
-              <p className="text-4xl font-bold text-[var(--color-brand)]">{match.tableLabel}</p>
+              <div className="hairline my-5" />
+              <p className="text-[12px] text-[var(--color-fg-muted)] uppercase tracking-[0.08em]">Your table</p>
+              <p className="display text-[64px] leading-none mt-1 text-[var(--color-fg)]">{match.tableLabel}</p>
               {match.tableDirections && (
-                <p className="text-base mt-3">{match.tableDirections}</p>
+                <p className="text-[15px] mt-4 text-[var(--color-fg-muted)] italic font-serif">{match.tableDirections}</p>
               )}
             </>
           ) : (
-            <p className="text-sm text-[var(--color-fg-muted)] mt-4">Your seat hasn&apos;t been assigned yet — please ask the host.</p>
+            <p className="text-[14px] text-[var(--color-fg-muted)] mt-4">Your seat hasn&apos;t been assigned yet — please ask the host.</p>
           )}
         </div>
 
@@ -278,7 +281,7 @@ function ResultView({
           />
         )}
 
-        <button onClick={onReset} className="btn h-12">Search again</button>
+        <button onClick={onReset} className="btn h-12 text-[14px]">Search again</button>
       </div>
     );
   }

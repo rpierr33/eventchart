@@ -43,32 +43,36 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex-1 flex items-center justify-center p-5">
-      <div className="card w-full max-w-md p-7">
-        <Link href="/" className="text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">← Back</Link>
-        <h1 className="text-2xl font-bold mt-4 mb-1">Create your account</h1>
-        <p className="text-sm text-[var(--color-fg-muted)] mb-6">Start running events in a few clicks.</p>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="label" htmlFor="name">Your name</label>
-            <input id="name" name="name" type="text" required className="input" placeholder="Daisy Planner" />
-          </div>
-          <div>
-            <label className="label" htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" required autoComplete="email" className="input" placeholder="you@example.com" />
-          </div>
-          <div>
-            <label className="label" htmlFor="password">Password</label>
-            <input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="input" placeholder="At least 8 characters" />
-          </div>
-          <button type="submit" disabled={loading} className="btn btn-primary w-full h-11">
-            {loading ? "Creating…" : "Create account"}
-          </button>
-        </form>
-        <p className="text-sm text-[var(--color-fg-muted)] text-center mt-6">
-          Already have an account?{" "}
-          <Link href="/login" className="text-[var(--color-fg)] underline">Sign in</Link>
-        </p>
+    <main className="flex-1 flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] mb-8">
+          ← Back home
+        </Link>
+        <div className="card p-8">
+          <h1 className="display text-[34px] mb-1">Get started</h1>
+          <p className="text-[14px] text-[var(--color-fg-muted)] mb-7">Create your account in seconds.</p>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div>
+              <label className="label" htmlFor="name">Your name</label>
+              <input id="name" name="name" type="text" required className="input" placeholder="Daisy Planner" />
+            </div>
+            <div>
+              <label className="label" htmlFor="email">Email</label>
+              <input id="email" name="email" type="email" required autoComplete="email" className="input" placeholder="you@example.com" />
+            </div>
+            <div>
+              <label className="label" htmlFor="password">Password</label>
+              <input id="password" name="password" type="password" required minLength={8} autoComplete="new-password" className="input" placeholder="At least 8 characters" />
+            </div>
+            <button type="submit" disabled={loading} className="btn btn-primary w-full h-12 text-[15px]">
+              {loading ? "Creating…" : "Create account"}
+            </button>
+          </form>
+          <p className="text-sm text-[var(--color-fg-muted)] text-center mt-6">
+            Already have an account?{" "}
+            <Link href="/login" className="text-[var(--color-fg)] underline underline-offset-2">Sign in</Link>
+          </p>
+        </div>
       </div>
     </main>
   );

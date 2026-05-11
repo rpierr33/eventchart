@@ -5,68 +5,122 @@ export default async function Home() {
   const session = await auth();
   return (
     <main className="flex-1">
-      <nav className="border-b border-[var(--color-border)]">
-        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          <Link href="/" className="font-bold text-lg tracking-tight flex items-center gap-2">
-            <span className="inline-block w-7 h-7 rounded-md bg-[var(--color-brand)]" />
-            eventChart
+      <nav className="border-b border-[var(--color-border)] bg-[var(--color-bg)]/85 backdrop-blur sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Mark />
+            <span className="font-medium tracking-tight">eventChart</span>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Link href="#how" className="btn btn-ghost h-9 text-[13px]">How it works</Link>
             {session?.user ? (
-              <Link href="/dashboard" className="btn btn-primary">Dashboard</Link>
+              <Link href="/dashboard" className="btn btn-primary h-9 text-[13px]">Open dashboard</Link>
             ) : (
               <>
-                <Link href="/login" className="btn btn-ghost">Sign in</Link>
-                <Link href="/signup" className="btn btn-primary">Get started</Link>
+                <Link href="/login" className="btn btn-ghost h-9 text-[13px]">Sign in</Link>
+                <Link href="/signup" className="btn btn-primary h-9 text-[13px]">Get started</Link>
               </>
             )}
           </div>
         </div>
       </nav>
 
-      <section className="max-w-5xl mx-auto px-5 pt-24 pb-16 text-center">
-        <p className="badge badge-blue mb-6">For event planners on their feet</p>
-        <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-tight">
-          The seating chart that<br />updates in real time.
+      <section className="max-w-3xl mx-auto px-6 pt-24 pb-20 text-center">
+        <span className="badge badge-accent mb-7">For event planners</span>
+        <h1 className="display text-[64px] sm:text-[76px] leading-[1.02] tracking-tight">
+          A seating chart that<br />keeps up with you.
         </h1>
-        <p className="mt-6 text-lg text-[var(--color-fg-muted)] max-w-2xl mx-auto">
-          Upload a floor plan. Drop pins. Generate a QR. Your guests scan, see their table,
-          and walk straight there. You move guests, mark no-shows, and approve walk-ins
-          from your phone — one thumb, dim ballroom, glass of champagne.
+        <p className="mt-7 text-[17px] leading-relaxed text-[var(--color-fg-muted)] max-w-xl mx-auto">
+          Upload your floor plan. We&apos;ll read every table on it. Guests scan a QR and see their seat circled on your actual plan — no printing, no apps, no friction.
         </p>
         <div className="mt-10 flex items-center justify-center gap-3">
-          <Link href={session?.user ? "/dashboard" : "/signup"} className="btn btn-primary h-12 px-6 text-base">
-            {session?.user ? "Open dashboard" : "Create your first event"}
+          <Link href={session?.user ? "/dashboard" : "/signup"} className="btn btn-primary h-12 px-7 text-[15px]">
+            {session?.user ? "Open dashboard" : "Try it free"}
           </Link>
-          <a href="#how" className="btn h-12 px-6 text-base">How it works</a>
+          <Link href="#how" className="btn h-12 px-6 text-[15px]">See how</Link>
         </div>
       </section>
 
-      <section id="how" className="max-w-6xl mx-auto px-5 py-16">
-        <h2 className="text-2xl font-bold mb-10 text-center">Built for the planner who can&apos;t stop moving</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="max-w-5xl mx-auto px-6">
+        <div className="hairline" />
+      </div>
+
+      <section id="how" className="max-w-5xl mx-auto px-6 py-20">
+        <h2 className="display text-[36px] sm:text-[44px] text-center mb-3">Built around the way you actually work.</h2>
+        <p className="text-center text-[var(--color-fg-muted)] max-w-xl mx-auto mb-14">
+          Every screen is designed for one thumb, in a dim ballroom, while you&apos;re also running the night.
+        </p>
+        <div className="grid md:grid-cols-3 gap-px bg-[var(--color-border)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
           {FEATURES.map((f) => (
-            <div key={f.title} className="card p-6">
-              <div className="text-2xl mb-3">{f.icon}</div>
-              <h3 className="font-semibold mb-2">{f.title}</h3>
-              <p className="text-sm text-[var(--color-fg-muted)]">{f.body}</p>
+            <div key={f.title} className="bg-[var(--color-surface)] p-8">
+              <div className="font-serif text-[28px] text-[var(--color-accent)] mb-3 leading-none">{f.numeral}</div>
+              <h3 className="text-[15px] font-medium mb-2 tracking-tight">{f.title}</h3>
+              <p className="text-[14px] leading-relaxed text-[var(--color-fg-muted)]">{f.body}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <footer className="border-t border-[var(--color-border)] py-8 text-center text-sm text-[var(--color-fg-faint)]">
-        eventChart · seating that keeps up
+      <section className="max-w-3xl mx-auto px-6 pb-24">
+        <div className="card p-10 text-center">
+          <h3 className="display text-[32px] mb-3">One event at a time, free.</h3>
+          <p className="text-[var(--color-fg-muted)] mb-6 text-[15px]">
+            Sign up, set up your first event in minutes, and run it from your phone.
+          </p>
+          <Link href={session?.user ? "/dashboard" : "/signup"} className="btn btn-primary h-12 px-7 text-[15px]">
+            {session?.user ? "Open dashboard" : "Start free"}
+          </Link>
+        </div>
+      </section>
+
+      <footer className="border-t border-[var(--color-border)] py-10 text-center text-[13px] text-[var(--color-fg-faint)]">
+        <span className="font-serif italic text-[var(--color-fg-muted)] text-[15px] mr-2">eventChart</span>
+        · seating that keeps up
       </footer>
     </main>
   );
 }
 
+function Mark() {
+  return (
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[var(--color-ink)] text-white">
+      <svg viewBox="0 0 20 20" width="14" height="14" fill="none">
+        <circle cx="10" cy="6" r="2.5" fill="currentColor" />
+        <path d="M10 10c-2.8 0-5 2.2-5 5h10c0-2.8-2.2-5-5-5Z" fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
 const FEATURES = [
-  { icon: "📐", title: "Upload, don't redraw", body: "Drop your venue's floor-plan PDF or image. Pin tables on top of the real layout — you keep the original, the pins are repositionable." },
-  { icon: "📱", title: "One scan to seat", body: "Guests scan a QR, type their last name, and see their table circled on the floor plan with a 'you are here' anchor and one-line directions." },
-  { icon: "👯", title: "Plus-ones & walk-ins", body: "Plus-ones can self-claim under their host's name. Walk-ins self-serve into open seats, with optional host approval." },
-  { icon: "⚡", title: "Live & realtime", body: "When you move a guest, their next scan shows the new table. No reprinting. The room's count, check-ins, and no-shows update on your phone live." },
-  { icon: "🔁", title: "Templates", body: "Save any layout as a template. Run the same ballroom four times a year? Do the floor plan once." },
-  { icon: "🛡️", title: "Privacy + offline", body: "Public lookup or 4-digit code gate. Works on bad signal — the lookup page caches the event for offline scan-and-find." },
+  {
+    numeral: "I",
+    title: "Upload, never redraw",
+    body: "Drop your venue's PDF or photo of the floor plan. AI reads every table on it — label, capacity, position. You review and edit, you don't click.",
+  },
+  {
+    numeral: "II",
+    title: "One scan to seat",
+    body: "Guests open the QR, type their last name, and see their table ringed on your actual floor plan with a one-line direction.",
+  },
+  {
+    numeral: "III",
+    title: "Live, on your phone",
+    body: "Move guests, mark no-shows, approve walk-ins from a single mobile view. Updates push to the room the moment you tap.",
+  },
+  {
+    numeral: "IV",
+    title: "Plus-ones & walk-ins",
+    body: "Plus-ones self-claim under their host's name. Walk-ins self-serve into open seats or queue for your approval.",
+  },
+  {
+    numeral: "V",
+    title: "Save once, reuse forever",
+    body: "Same hotel four times a year? Save the floor plan as a template. Next event loads it ready to assign.",
+  },
+  {
+    numeral: "VI",
+    title: "Offline-aware",
+    body: "Lookup keeps working in cellular dead zones. A printable fallback PDF is one click away as a final safety net.",
+  },
 ];

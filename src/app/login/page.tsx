@@ -39,7 +39,7 @@ function LoginForm() {
         <label className="label" htmlFor="password">Password</label>
         <input id="password" name="password" type="password" required autoComplete="current-password" className="input" placeholder="••••••••" />
       </div>
-      <button type="submit" disabled={loading} className="btn btn-primary w-full h-11">
+      <button type="submit" disabled={loading} className="btn btn-primary w-full h-12 text-[15px]">
         {loading ? "Signing in…" : "Sign in"}
       </button>
     </form>
@@ -48,18 +48,22 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="flex-1 flex items-center justify-center p-5">
-      <div className="card w-full max-w-md p-7">
-        <Link href="/" className="text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">← Back</Link>
-        <h1 className="text-2xl font-bold mt-4 mb-1">Welcome back</h1>
-        <p className="text-sm text-[var(--color-fg-muted)] mb-6">Sign in to manage your events.</p>
-        <Suspense>
-          <LoginForm />
-        </Suspense>
-        <p className="text-sm text-[var(--color-fg-muted)] text-center mt-6">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-[var(--color-fg)] underline">Sign up</Link>
-        </p>
+    <main className="flex-1 flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)] mb-8">
+          ← Back home
+        </Link>
+        <div className="card p-8">
+          <h1 className="display text-[34px] mb-1">Welcome back</h1>
+          <p className="text-[14px] text-[var(--color-fg-muted)] mb-7">Sign in to manage your events.</p>
+          <Suspense>
+            <LoginForm />
+          </Suspense>
+          <p className="text-sm text-[var(--color-fg-muted)] text-center mt-6">
+            New here?{" "}
+            <Link href="/signup" className="text-[var(--color-fg)] underline underline-offset-2">Create an account</Link>
+          </p>
+        </div>
       </div>
     </main>
   );

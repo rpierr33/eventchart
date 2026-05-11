@@ -36,12 +36,12 @@ export default async function EventPage({
   });
 
   return (
-    <main className="max-w-6xl mx-auto px-5 py-6">
-      <Link href="/dashboard" className="text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">← Dashboard</Link>
-      <header className="mt-3 mb-6 flex flex-wrap items-start justify-between gap-4">
+    <main className="max-w-6xl mx-auto px-6 py-8">
+      <Link href="/dashboard" className="text-[13px] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]">← Dashboard</Link>
+      <header className="mt-4 mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{event.name}</h1>
-          <p className="text-[var(--color-fg-muted)] text-sm mt-1">
+          <h1 className="display text-[40px] leading-none tracking-tight">{event.name}</h1>
+          <p className="text-[14px] text-[var(--color-fg-muted)] mt-2">
             {event.venueName ? `${event.venueName} · ` : ""}{fmtDate(event.date)}
             {" · "}<span className="capitalize">{event.status.toLowerCase()}</span>
           </p>
@@ -50,7 +50,7 @@ export default async function EventPage({
           {event.status !== "LIVE" && (
             <GoLiveButton eventId={event.id} />
           )}
-          <Link href={`/dashboard/events/${event.id}/live`} className="btn btn-primary h-10">
+          <Link href={`/dashboard/events/${event.id}/live`} className="btn btn-primary h-10 text-[14px]">
             {event.status === "LIVE" ? "Live view" : "Preview live view"}
           </Link>
         </div>
@@ -117,7 +117,7 @@ export default async function EventPage({
 function GoLiveButton({ eventId }: { eventId: string }) {
   return (
     <form action={`/api/events/${eventId}/golive`} method="POST">
-      <button className="btn h-10">Mark Live</button>
+      <button className="btn h-10 text-[14px]">Mark Live</button>
     </form>
   );
 }

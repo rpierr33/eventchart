@@ -1,11 +1,20 @@
 import type { Metadata, Viewport } from "next";
+import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import PWARegister from "@/components/PWARegister";
 
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
+const cormorant = Cormorant_Garamond({
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-cormorant",
+});
+
 export const metadata: Metadata = {
-  title: "eventChart — Dynamic Event Seating",
-  description: "Live seating charts for event planners. Upload a floor plan, drop pins, generate QR codes — guests find their seats with one scan.",
+  title: "eventChart — Seating that keeps up",
+  description: "A seating chart that updates in real time. Upload your floor plan, AI parses every table, guests scan a QR to find their seat.",
   manifest: "/manifest.webmanifest",
   applicationName: "eventChart",
   icons: { icon: "/favicon.svg" },
@@ -15,21 +24,40 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#0a0b0f",
+  themeColor: "#FBFAF7",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={`h-full ${inter.variable} ${cormorant.variable}`}>
+      <body
+        className="min-h-full flex flex-col"
+        style={{
+          fontFamily: "var(--font-inter), ui-sans-serif, system-ui",
+        }}
+      >
+        <style>{`
+          :root {
+            --font-sans: var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Helvetica, Arial, sans-serif;
+            --font-serif: var(--font-cormorant), "Tiempos Headline", "Iowan Old Style", Georgia, serif;
+          }
+        `}</style>
         {children}
         <PWARegister />
         <Toaster
-          theme="dark"
+          theme="light"
           position="top-center"
-          richColors
           toastOptions={{
-            style: { background: "#181b25", border: "1px solid #232733", color: "#e9edf6" },
+            style: {
+              background: "#FFFFFF",
+              border: "1px solid #E7E3DA",
+              color: "#14120E",
+              fontFamily: "var(--font-inter), system-ui",
+              fontSize: "14px",
+              borderRadius: "12px",
+              padding: "10px 14px",
+              boxShadow: "0 8px 24px rgba(20,18,14,0.08)",
+            },
           }}
         />
       </body>

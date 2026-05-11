@@ -55,22 +55,20 @@ export default function EventSetupTabs(props: {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-1 border-b border-[var(--color-border)] mb-6">
+      <div className="flex flex-wrap items-center gap-0 border-b border-[var(--color-border)] mb-8">
         {TABS.map(t => (
           <button
             key={t.key}
             onClick={() => switchTab(t.key)}
-            className={`px-4 h-10 rounded-t-lg font-medium text-sm transition-colors border-b-2 -mb-[1px] ${
-              tab === t.key
-                ? "border-[var(--color-brand)] text-[var(--color-fg)]"
-                : "border-transparent text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+            className={`px-1 mr-7 h-11 font-medium text-[14px] transition-colors border-b-2 -mb-[1px] ${
+              tab === t.key ? "tab-active" : "tab-inactive"
             }`}
           >
             {t.label}
-            {t.key === "layout" && stats.tables > 0 && <span className="ml-2 text-xs text-[var(--color-fg-faint)]">{stats.tables}</span>}
-            {t.key === "guests" && stats.guests > 0 && <span className="ml-2 text-xs text-[var(--color-fg-faint)]">{stats.guests}</span>}
-            {t.key === "assign" && stats.guests > 0 && <span className="ml-2 text-xs text-[var(--color-fg-faint)]">{stats.assigned}/{stats.guests}</span>}
-            {t.key === "qr" && stats.qrs > 0 && <span className="ml-2 text-xs text-[var(--color-fg-faint)]">{stats.qrs}</span>}
+            {t.key === "layout" && stats.tables > 0 && <span className="ml-2 text-[12px] text-[var(--color-fg-faint)] tabular-nums">{stats.tables}</span>}
+            {t.key === "guests" && stats.guests > 0 && <span className="ml-2 text-[12px] text-[var(--color-fg-faint)] tabular-nums">{stats.guests}</span>}
+            {t.key === "assign" && stats.guests > 0 && <span className="ml-2 text-[12px] text-[var(--color-fg-faint)] tabular-nums">{stats.assigned}/{stats.guests}</span>}
+            {t.key === "qr" && stats.qrs > 0 && <span className="ml-2 text-[12px] text-[var(--color-fg-faint)] tabular-nums">{stats.qrs}</span>}
           </button>
         ))}
       </div>
