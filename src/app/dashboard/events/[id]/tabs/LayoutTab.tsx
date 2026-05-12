@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { arrayBufferToBase64 } from "@/lib/utils";
 
@@ -628,17 +628,7 @@ function TableEditorRow({
       {/* Selector + nav */}
       <div className="flex items-center gap-2">
         <button onClick={() => go(-1)} disabled={tables.length < 2} className="btn btn-ghost h-9 w-9 p-0" title="Previous (←)">‹</button>
-        <select
-          value={safeIdx}
-          onChange={(e) => setSelectedIdx(parseInt(e.target.value, 10))}
-          className="input flex-1 h-9 text-[14px]"
-        >
-          {tables.map((row, i) => (
-            <option key={row.id ?? i} value={i}>
-              {row.label} · cap {row.capacity}{row.directionsText ? "" : " · no directions"}
-            </option>
-          ))}
-        </select>
+        <TableCombobox tables={tables} selectedIdx={safeIdx} onSelect={setSelectedIdx} />
         <button onClick={() => go(1)} disabled={tables.length < 2} className="btn btn-ghost h-9 w-9 p-0" title="Next (→)">›</button>
         <span className="text-[12px] text-[var(--color-fg-muted)] w-[60px] text-right">{safeIdx + 1} / {tables.length}</span>
       </div>
@@ -695,6 +685,154 @@ function TableEditorRow({
         />
         <div className="text-[11px] text-[var(--color-fg-faint)] mt-1">{(t.directionsText ?? "").length}/200</div>
       </div>
+    </div>
+  );
+}
+
+// Custom-styled combobox. Replaces the native <select> because OS-native pickers
+// (especially on macOS) render as huge unstyled popovers that bear no resemblance to
+// the rest of the app. This is a button → anchored panel with search + keyboard nav.
+function TableCombobox({
+  tables,
+  selectedIdx,
+  onSelect,
+}: {
+  tables: TableForTabs[];
+  selectedIdx: number;
+  onSelect: (idx: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(selectedIdx);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click + Escape
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // When opening, reset query and scroll highlight into view
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setHighlight(selectedIdx);
+      requestAnimationFrame(() => {
+        listRef.current?.querySelector<HTMLElement>('[data-highlighted="true"]')?.scrollIntoView({ block: "nearest" });
+      });
+    }
+  }, [open, selectedIdx]);
+
+  const filtered = tables
+    .map((t, i) => ({ t, i }))
+    .filter(({ t }) => !query.trim() || t.label.toLowerCase().includes(query.trim().toLowerCase()));
+
+  const selected = tables[selectedIdx];
+
+  function pick(i: number) {
+    onSelect(i);
+    setOpen(false);
+  }
+
+  function onListKey(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const cur = filtered.findIndex(f => f.i === highlight);
+      const nextIdx = cur < 0 || cur >= filtered.length - 1 ? filtered[0]?.i : filtered[cur + 1].i;
+      if (nextIdx !== undefined) setHighlight(nextIdx);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const cur = filtered.findIndex(f => f.i === highlight);
+      const prevIdx = cur <= 0 ? filtered[filtered.length - 1]?.i : filtered[cur - 1].i;
+      if (prevIdx !== undefined) setHighlight(prevIdx);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered.some(f => f.i === highlight)) pick(highlight);
+    }
+  }
+
+  return (
+    <div ref={rootRef} className="flex-1 relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="input h-9 text-[14px] flex items-center justify-between w-full text-left"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        <span className="truncate">
+          {selected ? (
+            <>
+              <span className="font-medium">{selected.label}</span>
+              <span className="text-[var(--color-fg-muted)]"> · cap {selected.capacity}</span>
+              {!selected.directionsText?.trim() && (
+                <span className="text-[var(--color-danger)] text-[12px]"> · no directions</span>
+              )}
+            </>
+          ) : "—"}
+        </span>
+        <span className="text-[var(--color-fg-muted)] ml-2 text-[12px]">▾</span>
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-0 right-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-lg z-30 overflow-hidden"
+          onKeyDown={onListKey}
+        >
+          <div className="p-1.5 border-b border-[var(--color-border-soft)]">
+            <input
+              autoFocus
+              type="search"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search tables…"
+              className="input h-8 text-[13px]"
+            />
+          </div>
+          <div ref={listRef} role="listbox" className="max-h-[280px] overflow-auto py-1">
+            {filtered.length === 0 && (
+              <div className="px-3 py-4 text-center text-[13px] text-[var(--color-fg-muted)]">No matches.</div>
+            )}
+            {filtered.map(({ t, i }) => {
+              const isSelected = i === selectedIdx;
+              const isHighlighted = i === highlight;
+              return (
+                <button
+                  key={t.id ?? i}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  data-highlighted={isHighlighted}
+                  onMouseEnter={() => setHighlight(i)}
+                  onClick={() => pick(i)}
+                  className={`w-full text-left px-3 py-1.5 text-[13px] flex items-center gap-2 ${
+                    isHighlighted ? "bg-[var(--color-surface-2)]" : ""
+                  } ${isSelected ? "font-medium" : ""}`}
+                >
+                  <span className="w-4 text-[var(--color-accent)]">{isSelected ? "✓" : ""}</span>
+                  <span className="flex-1">{t.label}</span>
+                  <span className="text-[var(--color-fg-muted)] text-[12px]">cap {t.capacity}</span>
+                  {!t.directionsText?.trim() && (
+                    <span className="text-[var(--color-danger)] text-[11px]">no dir</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
