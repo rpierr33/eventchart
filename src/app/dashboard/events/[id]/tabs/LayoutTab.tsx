@@ -461,22 +461,29 @@ function ReviewTable({
 
   async function generateDirections() {
     if (dirty) { toast.error("Save your edits first."); return; }
+    const t = toast.loading("AI is writing per-QR directions…");
     const res = await fetch("/api/ai/wayfinding", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ eventId }),
     });
     const data = await res.json();
+    toast.dismiss(t);
     if (!res.ok) { toast.error(data?.error ?? "Could not generate"); return; }
-    const apply = await fetch(`/api/events/${eventId}/wayfinding/apply`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ directions: data.directions }),
-    });
-    if (!apply.ok) { toast.error("Could not save directions"); return; }
-    const map = new Map<string, string>(data.directions.map((d: { tableId: string; directionsText: string }) => [d.tableId, d.directionsText]));
-    setTables(prev => prev.map(t => t.id && map.has(t.id) ? { ...t, directionsText: map.get(t.id)! } : t));
-    toast.success(`Directions written for ${data.directions.length} tables (${data.source}).`);
+
+    // The endpoint persisted per-origin directions AND mirrored the default into Table.directionsText.
+    // Refetch tables so the review column reflects the new text.
+    const tblRes = await fetch(`/api/events/${eventId}/tables`);
+    if (tblRes.ok) {
+      const tblData = await tblRes.json();
+      const fresh: TableForTabs[] = tblData.tables.map((row: { id: string; label: string; capacity: number; xPct: number; yPct: number; directionsText: string | null; notes: string | null; sectionId: string | null }) => ({
+        id: row.id, label: row.label, capacity: row.capacity, xPct: row.xPct, yPct: row.yPct,
+        directionsText: row.directionsText, notes: row.notes, sectionId: row.sectionId,
+      }));
+      setTables(fresh);
+      onChange({ ...layout, tables: fresh });
+    }
+    toast.success(`Directions written — ${data.persistedCount} per-QR paths, ${data.defaultCount ?? 0} default texts.`);
   }
 
   function deleteRow(idx: number) {

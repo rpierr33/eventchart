@@ -170,7 +170,19 @@ export async function POST(req: Request) {
     persistedCount += r.directions.length;
   }
 
-  return NextResponse.json({ results, persistedCount });
+  // Mirror the default (fromQrId IS NULL) direction into Table.directionsText so the planner's
+  // review table column has something to show. The per-origin TableDirection rows remain the
+  // source of truth for the public scan page.
+  const defaultResult = results.find(r => r.fromQrId === null);
+  if (defaultResult) {
+    await db.$transaction(
+      defaultResult.directions.map(d =>
+        db.table.update({ where: { id: d.tableId }, data: { directionsText: d.directionsText.slice(0, 200) } }),
+      ),
+    );
+  }
+
+  return NextResponse.json({ results, persistedCount, defaultCount: defaultResult?.directions.length ?? 0 });
 }
 
 function heuristicSentence(ox: number, oy: number, tx: number, ty: number, label: string, originLabel: string): string {
