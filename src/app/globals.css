@@ -133,6 +133,24 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .input::placeholder { color: var(--color-fg-faint); }
 textarea.input { padding: 12px 14px; height: auto; line-height: 1.45; }
 
+/* Dense table-cell variant. Used inside data tables where the row border does the visual
+   work and we don't want each cell wrapped in a chunky rounded form-input. */
+.input-cell {
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 4px;
+  outline: none;
+  background: transparent;
+  color: var(--color-fg);
+  border: 1px solid transparent;
+  transition: border-color 80ms ease, background 80ms ease;
+  font-size: 13px;
+}
+.input-cell:hover { background: var(--color-surface); }
+.input-cell:focus { background: var(--color-surface); border-color: var(--color-ink); box-shadow: 0 0 0 2px rgba(20,18,14,0.06); }
+.input-cell::placeholder { color: var(--color-fg-faint); }
+
 /* Labels */
 .label {
   display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px;

@@ -401,13 +401,21 @@ function ReviewTable({
   onChange: (next: LayoutForTabs | null) => void;
   onReplace: () => void;
 }) {
-  const [tables, setTables] = useState<TableForTabs[]>(layout.tables);
+  // Natural sort by default so "Table 2" comes before "Table 10".
+  const [tables, setTables] = useState<TableForTabs[]>(() =>
+    [...layout.tables].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" })),
+  );
   const [saving, setSaving] = useState(false);
-  const dirty = JSON.stringify(tables) !== JSON.stringify(layout.tables);
+  // selectedIdx points into the local `tables` array — the one row that the editor is currently editing.
+  const [selectedIdx, setSelectedIdx] = useState<number>(0);
+  // Dirty compares against the API's order (so a pure re-sort doesn't flag as dirty).
+  const dirty = JSON.stringify([...tables].sort((a, b) => (a.id ?? "").localeCompare(b.id ?? "")))
+              !== JSON.stringify([...layout.tables].sort((a, b) => (a.id ?? "").localeCompare(b.id ?? "")));
 
   function updateTable(idx: number, patch: Partial<TableForTabs>) {
     setTables(prev => prev.map((t, i) => i === idx ? { ...t, ...patch } : t));
   }
+
 
   async function saveAll() {
     setSaving(true);
@@ -549,46 +557,169 @@ function ReviewTable({
         </div>
 
         <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-[var(--color-border)] text-sm text-[var(--color-fg-muted)]">
-            Tables — review & edit
+          <div className="px-3 py-2 border-b border-[var(--color-border)] flex items-center gap-2">
+            <span className="text-sm text-[var(--color-fg-muted)]">Tables</span>
+            <span className="badge badge-muted text-[11px]">{tables.length}</span>
+            <span className="text-[12px] text-[var(--color-fg-faint)]">— pick one to edit</span>
+            <button
+              onClick={() => {
+                const v = prompt(`Set capacity for ALL ${tables.length} tables to:`);
+                const n = v ? parseInt(v, 10) : NaN;
+                if (!Number.isFinite(n) || n < 1 || n > 40) return;
+                setTables(prev => prev.map(t => ({ ...t, capacity: n })));
+              }}
+              className="btn btn-ghost h-7 px-2 text-[11px] ml-auto"
+              title="Bulk-set capacity for every table at once"
+              disabled={tables.length === 0}
+            >
+              ≡ Set all capacities…
+            </button>
           </div>
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-[var(--color-fg-muted)] uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-3 py-2 min-w-[140px]">Label</th>
-                  <th className="text-left px-3 py-2 w-[90px]">Cap.</th>
-                  <th className="text-left px-3 py-2">Directions <span className="normal-case font-normal text-[var(--color-fg-faint)]">(AI fills with “✨ Write directions”)</span></th>
-                  <th className="px-2 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {tables.map((t, idx) => (
-                  <tr key={t.id ?? idx} className="border-t border-[var(--color-border-soft)] hover:bg-[var(--color-surface-2)]">
-                    <td className="px-3 py-2 min-w-[140px]">
-                      <input className="input h-9" value={t.label} onChange={e => updateTable(idx, { label: e.target.value })} maxLength={40} />
-                    </td>
-                    <td className="px-3 py-2 w-[90px]">
-                      <input className="input h-9 text-center" type="number" min={1} max={40} value={t.capacity} onChange={e => updateTable(idx, { capacity: parseInt(e.target.value || "0", 10) || 0 })} />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input className="input h-9" value={t.directionsText ?? ""} onChange={e => updateTable(idx, { directionsText: e.target.value || null })} placeholder="“Past the bar, left of the dance floor.”" maxLength={200} />
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <button onClick={() => deleteRow(idx)} className="btn btn-danger h-8 px-2 text-xs">✕</button>
-                    </td>
-                  </tr>
-                ))}
-                {tables.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--color-fg-muted)]">No tables. Replace the plan to re-parse.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <TableEditorRow
+            tables={tables}
+            selectedIdx={selectedIdx}
+            setSelectedIdx={setSelectedIdx}
+            updateTable={updateTable}
+            deleteRow={deleteRow}
+          />
+          <CapacitySummary tables={tables} />
         </div>
       </div>
 
       {/* Polygon editor removed — sections come from the AI's read of the uploaded image. */}
+    </div>
+  );
+}
+
+// One-row table editor: dropdown picks the table to edit, the row below it is the editable
+// form (label, capacity, directions). Scales cleanly to any N because we never render N rows —
+// just one form bound to the selected row. Prev/Next arrows + keyboard nav for fast review.
+function TableEditorRow({
+  tables,
+  selectedIdx,
+  setSelectedIdx,
+  updateTable,
+  deleteRow,
+}: {
+  tables: TableForTabs[];
+  selectedIdx: number;
+  setSelectedIdx: (n: number) => void;
+  updateTable: (idx: number, patch: Partial<TableForTabs>) => void;
+  deleteRow: (idx: number) => void;
+}) {
+  const safeIdx = Math.max(0, Math.min(selectedIdx, tables.length - 1));
+  const t = tables[safeIdx];
+  if (!t) {
+    return (
+      <div className="p-6 text-center text-[var(--color-fg-muted)] text-sm">
+        No tables. Replace the plan to re-parse.
+      </div>
+    );
+  }
+  const hasDirections = !!t.directionsText?.trim();
+
+  function go(delta: number) {
+    const next = (safeIdx + delta + tables.length) % tables.length;
+    setSelectedIdx(next);
+  }
+
+  return (
+    <div className="p-3 space-y-2">
+      {/* Selector + nav */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => go(-1)} disabled={tables.length < 2} className="btn btn-ghost h-9 w-9 p-0" title="Previous (←)">‹</button>
+        <select
+          value={safeIdx}
+          onChange={(e) => setSelectedIdx(parseInt(e.target.value, 10))}
+          className="input flex-1 h-9 text-[14px]"
+        >
+          {tables.map((row, i) => (
+            <option key={row.id ?? i} value={i}>
+              {row.label} · cap {row.capacity}{row.directionsText ? "" : " · no directions"}
+            </option>
+          ))}
+        </select>
+        <button onClick={() => go(1)} disabled={tables.length < 2} className="btn btn-ghost h-9 w-9 p-0" title="Next (→)">›</button>
+        <span className="text-[12px] text-[var(--color-fg-muted)] w-[60px] text-right">{safeIdx + 1} / {tables.length}</span>
+      </div>
+
+      {/* Editable fields */}
+      <div className="grid grid-cols-[1fr_90px_auto] gap-2 items-end">
+        <div>
+          <label className="label text-[11px]">Label</label>
+          <input
+            className="input h-10"
+            value={t.label}
+            onChange={(e) => updateTable(safeIdx, { label: e.target.value })}
+            maxLength={40}
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="label text-[11px]">Capacity</label>
+          <input
+            className="input h-10 text-center"
+            type="number"
+            min={1}
+            max={40}
+            value={t.capacity}
+            onChange={(e) => updateTable(safeIdx, { capacity: parseInt(e.target.value || "0", 10) || 0 })}
+          />
+        </div>
+        <button
+          onClick={() => {
+            if (confirm(`Delete ${t.label}? This removes its seat assignments too.`)) {
+              deleteRow(safeIdx);
+              setSelectedIdx(Math.min(safeIdx, tables.length - 2));
+            }
+          }}
+          className="btn btn-danger h-10 px-3 text-[13px]"
+          title={`Delete ${t.label}`}
+        >
+          Delete
+        </button>
+      </div>
+
+      <div>
+        <label className="label text-[11px] flex items-center gap-1.5">
+          Directions
+          {!hasDirections && <span className="text-[var(--color-fg-faint)] font-normal">— empty. Click “✨ Write directions” above to fill all tables at once.</span>}
+        </label>
+        <textarea
+          className="input min-h-[64px] text-[13px]"
+          value={t.directionsText ?? ""}
+          onChange={(e) => updateTable(safeIdx, { directionsText: e.target.value || null })}
+          placeholder="“Past the bar, left of the dance floor.”"
+          maxLength={200}
+          rows={2}
+        />
+        <div className="text-[11px] text-[var(--color-fg-faint)] mt-1">{(t.directionsText ?? "").length}/200</div>
+      </div>
+    </div>
+  );
+}
+
+// Compact at-a-glance summary so the planner doesn't need to scroll a list to see
+// the distribution of capacities or which tables still need directions.
+function CapacitySummary({ tables }: { tables: TableForTabs[] }) {
+  if (tables.length === 0) return null;
+  const byCap = new Map<number, number>();
+  let missingDirections = 0;
+  for (const t of tables) {
+    byCap.set(t.capacity, (byCap.get(t.capacity) ?? 0) + 1);
+    if (!t.directionsText?.trim()) missingDirections++;
+  }
+  const capRows = [...byCap.entries()].sort((a, b) => a[0] - b[0]);
+  return (
+    <div className="px-3 py-2 border-t border-[var(--color-border)] text-[12px] text-[var(--color-fg-muted)] flex flex-wrap items-center gap-2">
+      <span className="font-medium">At a glance:</span>
+      {capRows.map(([cap, n]) => (
+        <span key={cap} className="badge badge-muted text-[11px]">{n}× cap {cap}</span>
+      ))}
+      <span className="text-[var(--color-fg-faint)]">·</span>
+      <span className={missingDirections === 0 ? "text-[var(--color-fg-muted)]" : "text-[var(--color-danger)]"}>
+        {missingDirections === 0 ? "all tables have directions ✓" : `${missingDirections} missing directions`}
+      </span>
     </div>
   );
 }
