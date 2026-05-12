@@ -1,0 +1,17 @@
+import { chromium } from "playwright";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
+const DIR = resolve("screenshots/assign-current-" + new Date().toISOString().replace(/[:.]/g, "-"));
+await mkdir(DIR, { recursive: true });
+const b = await chromium.launch({ headless: true });
+const ctx = await b.newContext({ viewport: { width: 1500, height: 1100 } });
+const page = await ctx.newPage();
+await page.goto("http://localhost:3002/login", { waitUntil: "networkidle" });
+await page.fill('input[name="email"]', "daisy@test.com");
+await page.fill('input[name="password"]', "testpass123");
+await Promise.all([page.waitForURL(/\/dashboard/), page.click('button[type="submit"]')]);
+await page.goto("http://localhost:3002/dashboard/events/cmp0jt4zl0001ia9klwpeskvp?tab=assign", { waitUntil: "networkidle" });
+await page.waitForTimeout(1000);
+await page.screenshot({ path: `${DIR}/assign.png`, fullPage: true });
+console.log("shot:", DIR + "/assign.png");
+await b.close();
