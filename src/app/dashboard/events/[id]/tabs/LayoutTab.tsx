@@ -1,66 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { arrayBufferToBase64 } from "@/lib/utils";
-import SectionPolygonEditor from "@/components/SectionPolygonEditor";
-
-// Pick-mode section assignment for a single table row in the review table.
-// Dropdown of existing sections + "+ New section…" inline create.
-function SectionPicker({
-  eventId,
-  sections,
-  currentId,
-  onChange,
-}: {
-  eventId: string;
-  sections: SectionForTabs[];
-  currentId: string | null;
-  onChange: (sectionId: string | null) => void;
-}) {
-  const [localSections, setLocalSections] = useState<SectionForTabs[]>(sections);
-  useEffect(() => setLocalSections(sections), [sections]);
-
-  async function createNew() {
-    const label = prompt("New section name (e.g., Bride's Side, VIP, Kids):");
-    if (!label?.trim()) return;
-    // Default coords: image center — planner can move later if we ship polygon mode
-    const next = [...localSections, { id: "tmp", label: label.trim(), xPct: 50, yPct: 50, color: null }];
-    const res = await fetch(`/api/events/${eventId}/sections`, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        sections: next.filter(s => s.id !== "tmp").map(({ label, xPct, yPct, color }) => ({ label, xPct, yPct, color: color ?? null }))
-          .concat([{ label: label.trim(), xPct: 50, yPct: 50, color: null }]),
-      }),
-    });
-    if (!res.ok) { toast.error("Could not create section"); return; }
-    const data = await res.json();
-    setLocalSections(data.sections.map((s: { id: string; label: string; xPct: number; yPct: number; color: string | null }) => ({
-      id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, color: s.color,
-    })));
-    const just = (data.sections as Array<{ id: string; label: string }>).find(s => s.label.toLowerCase() === label.trim().toLowerCase());
-    if (just) onChange(just.id);
-  }
-
-  return (
-    <select
-      className="input h-9"
-      value={currentId ?? ""}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (v === "__new__") { void createNew(); return; }
-        onChange(v === "" ? null : v);
-      }}
-    >
-      <option value="">— None —</option>
-      {localSections.map(s => (
-        <option key={s.id} value={s.id}>{s.label}</option>
-      ))}
-      <option value="__new__">+ New section…</option>
-    </select>
-  );
-}
 
 export type TableForTabs = {
   id?: string;
@@ -461,7 +403,6 @@ function ReviewTable({
 }) {
   const [tables, setTables] = useState<TableForTabs[]>(layout.tables);
   const [saving, setSaving] = useState(false);
-  const [showPolygonEditor, setShowPolygonEditor] = useState(false);
   const dirty = JSON.stringify(tables) !== JSON.stringify(layout.tables);
 
   function updateTable(idx: number, patch: Partial<TableForTabs>) {
@@ -544,6 +485,12 @@ function ReviewTable({
 
   const aspect = layout.sourceImageHeight / layout.sourceImageWidth;
 
+  const sections = layout.sections ?? [];
+  const tablesBySection = new Map<string, number>();
+  for (const t of tables) {
+    if (t.sectionId) tablesBySection.set(t.sectionId, (tablesBySection.get(t.sectionId) ?? 0) + 1);
+  }
+
   return (
     <div className="space-y-5">
       <div className="card p-4 flex flex-wrap items-center gap-2">
@@ -551,13 +498,27 @@ function ReviewTable({
           AI found <strong className="text-[var(--color-fg)]">{layout.tables.length}</strong> tables on your plan. Edit anything below — capacity, label, or directions text. Hit Save when done.
         </div>
         <button onClick={generateDirections} disabled={dirty || tables.length === 0} className="btn h-9 px-3 text-sm">✨ Write directions</button>
-        <button onClick={() => setShowPolygonEditor(true)} disabled={dirty || tables.length === 0} className="btn h-9 px-3 text-sm" title="Draw section regions on the floor plan — tables inside auto-assign.">◇ Draw sections</button>
         <button onClick={saveAsTemplate} disabled={dirty} className="btn h-9 px-3 text-sm">Save as template</button>
         <button onClick={onReplace} className="btn btn-danger h-9 px-3 text-sm">Replace plan</button>
         <button onClick={saveAll} disabled={!dirty || saving} className="btn btn-primary h-9 px-3 text-sm">
           {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
         </button>
       </div>
+
+      {/* Sections are detected by the AI directly from the uploaded floor plan.
+          To define them, mark colored regions + labels on the image BEFORE upload.
+          Shown here read-only so the planner can confirm the AI picked them up. */}
+      {sections.length > 0 && (
+        <div className="card p-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium mr-1">AI-detected sections:</span>
+          {sections.map(s => (
+            <span key={s.id} className="badge" style={{ background: (s.color ?? "#8B6F47") + "22", color: s.color ?? "#8B6F47", borderColor: (s.color ?? "#8B6F47") + "55" }}>
+              {s.label} <span className="opacity-70">· {tablesBySection.get(s.id) ?? 0} tables</span>
+            </span>
+          ))}
+          <span className="text-[12px] text-[var(--color-fg-faint)] ml-auto">To change sections, re-upload your floor plan with the regions marked.</span>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[1.4fr_1fr] gap-5">
         <div className="card overflow-hidden h-fit">
@@ -588,32 +549,23 @@ function ReviewTable({
             <table className="w-full text-sm">
               <thead className="text-xs text-[var(--color-fg-muted)] uppercase tracking-wider">
                 <tr>
-                  <th className="text-left px-3 py-2">Label</th>
-                  <th className="text-left px-3 py-2">Cap.</th>
-                  <th className="text-left px-3 py-2">Section</th>
-                  <th className="text-left px-3 py-2">Directions</th>
+                  <th className="text-left px-3 py-2 min-w-[140px]">Label</th>
+                  <th className="text-left px-3 py-2 w-[90px]">Cap.</th>
+                  <th className="text-left px-3 py-2">Directions <span className="normal-case font-normal text-[var(--color-fg-faint)]">(AI fills with “✨ Write directions”)</span></th>
                   <th className="px-2 py-2" />
                 </tr>
               </thead>
               <tbody>
                 {tables.map((t, idx) => (
                   <tr key={t.id ?? idx} className="border-t border-[var(--color-border-soft)] hover:bg-[var(--color-surface-2)]">
-                    <td className="px-3 py-2 w-[100px]">
+                    <td className="px-3 py-2 min-w-[140px]">
                       <input className="input h-9" value={t.label} onChange={e => updateTable(idx, { label: e.target.value })} maxLength={40} />
                     </td>
-                    <td className="px-3 py-2 w-[80px]">
-                      <input className="input h-9" type="number" min={1} max={40} value={t.capacity} onChange={e => updateTable(idx, { capacity: parseInt(e.target.value || "0", 10) || 0 })} />
-                    </td>
-                    <td className="px-3 py-2 w-[160px]">
-                      <SectionPicker
-                        eventId={eventId}
-                        sections={layout.sections ?? []}
-                        currentId={t.sectionId ?? null}
-                        onChange={(sectionId) => updateTable(idx, { sectionId })}
-                      />
+                    <td className="px-3 py-2 w-[90px]">
+                      <input className="input h-9 text-center" type="number" min={1} max={40} value={t.capacity} onChange={e => updateTable(idx, { capacity: parseInt(e.target.value || "0", 10) || 0 })} />
                     </td>
                     <td className="px-3 py-2">
-                      <input className="input h-9" value={t.directionsText ?? ""} onChange={e => updateTable(idx, { directionsText: e.target.value || null })} placeholder="(optional)" maxLength={200} />
+                      <input className="input h-9" value={t.directionsText ?? ""} onChange={e => updateTable(idx, { directionsText: e.target.value || null })} placeholder="“Past the bar, left of the dance floor.”" maxLength={200} />
                     </td>
                     <td className="px-2 py-2 text-right">
                       <button onClick={() => deleteRow(idx)} className="btn btn-danger h-8 px-2 text-xs">✕</button>
@@ -629,58 +581,7 @@ function ReviewTable({
         </div>
       </div>
 
-      {showPolygonEditor && (
-        <SectionPolygonEditor
-          eventId={eventId}
-          layoutId={layout.id}
-          layoutImageUrl={layout.sourceImageUrl}
-          layoutWidth={layout.sourceImageWidth}
-          layoutHeight={layout.sourceImageHeight}
-          existingSections={(layout.sections ?? []).map(s => ({
-            id: s.id,
-            label: s.label,
-            xPct: s.xPct,
-            yPct: s.yPct,
-            color: s.color,
-            polygon: s.polygon,
-          }))}
-          tables={tables.filter(t => t.id).map(t => ({
-            id: t.id!,
-            label: t.label,
-            xPct: t.xPct,
-            yPct: t.yPct,
-          }))}
-          onClose={() => setShowPolygonEditor(false)}
-          onSaved={async () => {
-            setShowPolygonEditor(false);
-            // Refetch sections + tables so the picker dropdowns and assignments update.
-            try {
-              const [secRes, tblRes] = await Promise.all([
-                fetch(`/api/events/${eventId}/sections`),
-                fetch(`/api/events/${eventId}/tables`),
-              ]);
-              if (secRes.ok && tblRes.ok) {
-                const secData = await secRes.json();
-                const tblData = await tblRes.json();
-                const newSections: SectionForTabs[] = secData.sections.map(
-                  (s: { id: string; label: string; xPct: number; yPct: number; color: string | null; polygon: unknown }) => ({
-                    id: s.id, label: s.label, xPct: s.xPct, yPct: s.yPct, color: s.color,
-                    polygon: Array.isArray(s.polygon) ? (s.polygon as Array<{x: number; y: number}>) : null,
-                  }),
-                );
-                const newTables: TableForTabs[] = tblData.tables.map(
-                  (t: { id: string; label: string; capacity: number; xPct: number; yPct: number; directionsText: string | null; notes: string | null; sectionId: string | null }) => ({
-                    id: t.id, label: t.label, capacity: t.capacity, xPct: t.xPct, yPct: t.yPct,
-                    directionsText: t.directionsText, notes: t.notes, sectionId: t.sectionId,
-                  }),
-                );
-                setTables(newTables);
-                onChange({ ...layout, sections: newSections, tables: newTables });
-              }
-            } catch { /* refetch errors are non-fatal */ }
-          }}
-        />
-      )}
+      {/* Polygon editor removed — sections come from the AI's read of the uploaded image. */}
     </div>
   );
 }
